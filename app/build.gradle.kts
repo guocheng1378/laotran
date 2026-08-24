@@ -5,14 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 从 local.properties 读取 DeepSeek API Key（本地构建用）
+// 从 local.properties 读取大模型 API Key（本地构建用）
 val localProps = Properties()
 val localPropsFile = rootProject.file("local.properties")
 if (localPropsFile.exists()) {
     localPropsFile.inputStream().use { localProps.load(it) }
 }
-val deepseekApiKey: String = (localProps.getProperty("DEEPSEEK_API_KEY")
-        ?: System.getenv("DEEPSEEK_API_KEY")
+val apiKey: String = (localProps.getProperty("API_KEY")
+        ?: System.getenv("API_KEY")
         ?: "")
 
 android {
@@ -23,11 +23,11 @@ android {
         applicationId = "com.eta.laotrans"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.2"
 
-        // 注入 DeepSeek Key 到 BuildConfig
-        buildConfigField("String", "DEEPSEEK_API_KEY", "\"${deepseekApiKey}\"")
+        // 注入大模型 API Key 到 BuildConfig
+        buildConfigField("String", "API_KEY", "\"${apiKey}\"")
     }
 
     buildTypes {
