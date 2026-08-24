@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // 从 local.properties / 环境变量读取大模型 API Key
@@ -25,7 +26,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 5
-        versionName = "1.3"
+        versionName = "1.4"
         buildConfigField("String", "API_KEY", "\"${apiKey}\"")
     }
 
@@ -42,7 +43,6 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true
         buildConfig = true
     }
 }
@@ -54,11 +54,9 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.3")
     implementation("com.google.android.material:material:1.12.0")
-    implementation("androidx.activity:activity-ktx:1.9.2")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.webkit:webkit:1.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
