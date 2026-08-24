@@ -56,4 +56,8 @@
     <string name="btn_delete">🗑 ລຶບ</string>
     <string name="prompt_speak">ກະລຸນາເວົ້າ…</string>
     <string name="toast_speak_first">ກະລຸນາແປກ່ອນ, ຈາກນັ້ນອ່ານອອກສຽງ</string>
+    <string name="voice_zh">🇨🇳 ພາສາຈີນ</string>
+    <string name="voice_lo">🇱🇦 ພາສາລາວ</string>
+    <string name="clear_btn">✕</string>
+    <string name="clear_cd">ລຶບຂໍ້ຄວາມ</string>
 </resources>
