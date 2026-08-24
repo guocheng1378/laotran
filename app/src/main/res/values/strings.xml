@@ -56,4 +56,8 @@
     <string name="btn_delete">🗑 删除</string>
     <string name="prompt_speak">请说话…</string>
     <string name="toast_speak_first">先翻译，再朗读</string>
+    <string name="voice_zh">🇨🇳 中文</string>
+    <string name="voice_lo">🇱🇦 老挝语</string>
+    <string name="clear_btn">✕</string>
+    <string name="clear_cd">清空输入</string>
 </resources>
