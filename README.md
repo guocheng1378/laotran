@@ -33,6 +33,12 @@
 
 > 👉 **https://chat.b.ai/chat?invite_code=C7SA2S**
 
+<p align="center">
+  扫码注册 b.ai，领取免费 API Key 👇
+  <br/>
+  <img src="docs/laotran-qr.png" alt="b.ai 免费 API 注册二维码" width="240"/>
+</p>
+
 打开链接注册后，在 b.ai 控制台创建 API Key，然后把 Key 填进 App 的**设置界面**即可。API Key / 接口地址 / 模型名都在 App 内设置，**无需改代码、无需重新打包**。
 
 ## 📱 安装前要准备什么
