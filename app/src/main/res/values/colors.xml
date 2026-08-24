@@ -1,24 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#7C6CF0</color>
-    <!-- 玻璃色板 -->
-    <color name="glass_surface">#CCFFFFFF</color>
-    <color name="glass_card">#55FFFFFF</color>
-    <color name="glass_card_mid">#66FFFFFF</color>
-    <color name="glass_card_high">#99FFFFFF</color>
-    <color name="glass_dialog">#EBFFFFFF</color>
-    <color name="glass_input">#40FFFFFF</color>
-    <color name="glass_stroke">#66FFFFFF</color>
-    <color name="glass_stroke_high">#99FFFFFF</color>
-    <color name="text_primary">#1A1A2E</color>
-    <color name="text_secondary">#555577</color>
-    <color name="text_hint">#9999B0</color>
-    <color name="accent_purple">#7C6CF0</color>
-    <color name="accent_blue">#5B9DF6</color>
-    <color name="accent_pink">#A78BF8</color>
-    <color name="gradient_start">#ECEBFF</color>
-    <color name="gradient_mid">#F5F0FF</color>
-    <color name="gradient_end">#EAF0FF</color>
-    <color name="mic_gradient_start">#A78BF8</color>
-    <color name="mic_gradient_end">#6FB6FF</color>
+    <color name="ic_launcher_background">#5B6BF8</color>
+    <!-- HyperOS 浅色界面 -->
+    <color name="surface">#F4F6FF</color>
+    <color name="glass_surface">#FFFFFF</color>
+
+    <!-- 卡片/输入 -->
+    <color name="glass_card">#F7FAFF</color>
+    <color name="glass_card_mid">#EAF0FB</color>
+    <color name="glass_card_high">#CFFFFFFF</color>
+    <color name="glass_dialog">#FCFDFF</color>
+    <color name="glass_input">#F5F8FF</color>
+
+    <!-- 描边 -->
+    <color name="glass_stroke">#14000000</color>
+    <color name="glass_stroke_high">#22000000</color>
+
+    <!-- 文字 -->
+    <color name="text_primary">#1A1D2B</color>
+    <color name="text_secondary">#5A5F73</color>
+    <color name="text_hint">#99A1B5</color>
+
+    <!-- 强调蓝紫 -->
+    <color name="accent_purple">#5B6BF8</color>
+    <color name="accent_blue">#7B8CFF</color>
+    <color name="accent_pink">#8A9BFF</color>
+
+    <!-- 背景渐变 -->
+    <color name="gradient_start">#F7F9FF</color>
+    <color name="gradient_mid">#EDF2FF</color>
+    <color name="gradient_end">#E2EAFF</color>
+
+    <!-- 麦克风 -->
+    <color name="mic_gradient_start">#6A7CF8</color>
+    <color name="mic_gradient_end">#7DA8FF</color>
 </resources>
