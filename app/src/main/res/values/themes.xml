@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.LaoTran" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorSecondary">@color/purple_200</item>
+    </style>
+    <color name="purple_500">#6650a4</color>
+    <color name="purple_200">#bbb1e0</color>
+</resources>
