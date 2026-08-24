@@ -10,7 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.provider.Settings
-import android.speech.RecognitionListener
 import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -185,7 +184,7 @@ class MainActivity : AppCompatActivity() {
     private fun findRecognitionComponent(): ComponentName? {
         // 1) 系统已配置的
         val configured = Settings.Secure.getString(
-            contentResolver, Settings.Secure.VOICE_RECOGNITION_SERVICE
+            contentResolver, "voice_recognition_service"
         )
         if (!configured.isNullOrBlank()) {
             ComponentName.unflattenFromString(configured)?.let { return it }
