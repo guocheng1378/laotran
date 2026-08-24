@@ -61,13 +61,8 @@ class MainActivity : AppCompatActivity() {
     private var lastTranslated: String = ""
 
     // 语音输入：应用内 SpeechRecognizer（自绘界面，识别器就绪后才提示说话）
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var isListening = false
-    private var fallbackToSystemTried = false
-    private var lastListenLang = "zh-CN"
     private lateinit var voiceZhBtn: Button
     private lateinit var voiceLaBtn: Button
-    private var activeVoiceBtn: Button? = null
     private var pendingVoiceLang = "zh-CN"
     private var pendingVoiceDir = 1
     private val REQ_SPEECH = 4002
@@ -94,9 +89,6 @@ class MainActivity : AppCompatActivity() {
         setupSpeedControl()
         setupAutoTranslate()
         setupTts()
-
-        // 预热语音识别服务：提前绑定，避免首次点击时冷启动导致识别失败
-        runCatching { getRecognizer() }
 
         updateDirLabel()
     }
@@ -178,264 +170,16 @@ class MainActivity : AppCompatActivity() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
-    // ====== 语音输入：应用内 SpeechRecognizer ======
-    private fun getRecognizer(): SpeechRecognizer {
-        if (speechRecognizer == null) {
-            val cn = findRecognitionComponent()
-            speechRecognizer = if (cn != null) {
-                SpeechRecognizer.createSpeechRecognizer(this, cn)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(this)
-            }
-            speechRecognizer?.setRecognitionListener(speechListener)
-        }
-        return speechRecognizer!!
-    }
-
-    /**
-     * 寻找可用的语音识别服务组件。
-     * 部分 ROM（如精简过的小米）voice_recognition_service 为空，
-     * SpeechRecognizer 默认路径会直接报 ERROR_CLIENT，必须显式指定组件。
-     */
-    private fun findRecognitionComponent(): ComponentName? {
-        // 1) 系统已配置的
-        val configured = Settings.Secure.getString(
-            contentResolver, "voice_recognition_service"
-        )
-        if (!configured.isNullOrBlank()) {
-            ComponentName.unflattenFromString(configured)?.let { return it }
-        }
-        // 2) 从已安装识别服务中按优先级挑选
-        val services = runCatching {
-            packageManager.queryIntentServices(
-                Intent(RecognitionService.SERVICE_INTERFACE), 0
-            )
-        }.getOrNull().orEmpty()
-        if (services.isEmpty()) return null
-        val preferred = listOf(
-            "com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService",
-            "com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService"
-        )
-        for (flat in preferred) {
-            val cn = ComponentName.unflattenFromString(flat) ?: continue
-            if (services.any {
-                    it.serviceInfo.packageName == cn.packageName &&
-                        it.serviceInfo.name == cn.className
-                }) return cn
-        }
-        val first = services.first()
-        return ComponentName(first.serviceInfo.packageName, first.serviceInfo.name)
-    }
-
-    private val speechListener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {
-            // 识别器真正就绪，此时提示说话才能录上
-            runOnUiThread {
-                isListening = true
-                activeVoiceBtn?.text = "⏹ 聆听中"
-                statusText.text = "请说话…"
-            }
-        }
-
-        override fun onBeginningOfSpeech() {}
-
-        override fun onRmsChanged(rmsdB: Float) {}
-
-        override fun onBufferReceived(buffer: ByteArray?) {}
-
-        override fun onEndOfSpeech() {
-            runOnUiThread { statusText.text = "识别中…" }
-        }
-
-        override fun onError(error: Int) {
-            runOnUiThread {
-                isListening = false
-                resetVoiceButtons()
-                // 应用内 SpeechRecognizer 对老挝语支持差、中文也偶发失败；系统 Google 语音输入框
-                // 更可靠，故任何语言模式下识别明显失败时自动切到系统框（仅一次，避免循环）。
-                val shouldFallback =
-                    error == SpeechRecognizer.ERROR_CLIENT ||
-                    error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
-                    error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
-                    error == SpeechRecognizer.ERROR_NO_MATCH ||
-                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-                if (shouldFallback && !fallbackToSystemTried) {
-                    fallbackToSystemTried = true
-                    statusText.text = "应用内识别失败，改用系统 Google 语音输入框…"
-                    launchSystemRecognition(lastListenLang)
-                    return@runOnUiThread
-                }
-                statusText.text = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH,
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没听清，请再试一次"
-                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
-                    SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "语音服务不支持当前语言，请改用文字输入"
-                    SpeechRecognizer.ERROR_NETWORK,
-                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络异常，请检查网络后重试"
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音服务忙，请稍后再试"
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
-                    else -> "识别失败（$error），请重试"
-                }
-                // ERROR_CLIENT（识别服务不可用/未配置）时回退到系统识别界面
-                if (error == SpeechRecognizer.ERROR_CLIENT && !fallbackToSystemTried) {
-                    fallbackToSystemTried = true
-                    statusText.text = "应用内识别不可用，改用系统识别…"
-                    launchSystemRecognition(lastListenLang)
-                }
-            }
-        }
-
-        override fun onResults(results: Bundle?) {
-            runOnUiThread {
-                isListening = false
-                resetVoiceButtons()
-                val text = results
-                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()
-                    ?.trim()
-                if (text.isNullOrEmpty()) {
-                    statusText.text = "没听清，请再试一次"
-                    return@runOnUiThread
-                }
-                // 老挝语识别模式下检查结果是否真的含老挝文字
-                if (lastListenLang == "lo-LA" && !containsLaoScript(text)) {
-                    Log.d("LaoTran", "lo-LA 识别结果非老挝文: $text")
-                    statusText.text = "识别结果不是老挝语，请重试"
-                    // 仍填入，让用户看到实际结果
-                } else if (lastListenLang == "zh-CN" && containsLaoScript(text)) {
-                    statusText.text = "检测到老挝语，请改用 🎤老 按钮识别"
-                }
-                isAutoInserting = true
-                inputText.setText(text)
-                inputText.setSelection(text.length)
-                isAutoInserting = false
-                lastTranslated = ""
-                doTranslate(manual = false)
-            }
-        }
-
-        override fun onPartialResults(partialResults: Bundle?) {}
-
-        override fun onEvent(eventType: Int, params: Bundle?) {}
-    }
-
-    private var recognizerSupportedLanguages: Set<String>? = null
-
-    /** 查询识别服务支持的语言列表（通过标准 ACTION_GET_LANGUAGE_DETAILS 广播） */
-    private fun checkRecognizerLanguages(callback: (Set<String>) -> Unit) {
-        if (recognizerSupportedLanguages != null) {
-            callback(recognizerSupportedLanguages!!)
-            return
-        }
-        val cn = findRecognitionComponent()
-        if (cn == null) {
-            callback(emptySet())
-            return
-        }
-        val intent = Intent(RecognizerIntent.ACTION_GET_LANGUAGE_DETAILS).apply {
-            setPackage(cn.packageName)
-        }
-        val answered = arrayOf(false)
-        // 超时保护：识别服务不响应广播时视为语言未知，不阻塞语音输入
-        val timeoutRunnable = object : Runnable {
-            override fun run() {
-                if (!answered[0]) {
-                    answered[0] = true
-                    callback(emptySet())
-                }
-            }
-        }
-        val mainHandler = Handler(Looper.getMainLooper())
-        mainHandler.postDelayed(timeoutRunnable, 2500)
-        sendOrderedBroadcast(intent, null, object : BroadcastReceiver() {
-            override fun onReceive(context: android.content.Context, i: Intent) {
-                if (answered[0]) return
-                answered[0] = true
-                mainHandler.removeCallbacks(timeoutRunnable)
-                val langs = i.getStringArrayListExtra(
-                    RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES
-                )?.toSet() ?: emptySet()
-                recognizerSupportedLanguages = langs
-                callback(langs)
-            }
-        }, null, Activity.RESULT_OK, null, null)
-    }
-
-    /** 判断文本是否包含老挝文（Unicode U+0E80–U+0EFF） */
-    private fun containsLaoScript(text: String): Boolean {
-        return text.any { it.code in 0x0E80..0x0EFF }
-    }
-
-    private fun resetVoiceButtons() {
-        voiceZhBtn.text = "🎤中"
-        voiceLaBtn.text = "🎤老"
-    }
-
-    private fun handleRecognizedText(text: String) {
-        // 老挝语识别模式下检查结果是否真的含老挝文字
-        if (lastListenLang == "lo-LA" && !containsLaoScript(text)) {
-            Log.d("LaoTran", "lo-LA 识别结果非老挝文: $text")
-            statusText.text = "识别结果不是老挝语，请重试"
-        } else if (lastListenLang == "zh-CN" && containsLaoScript(text)) {
-            statusText.text = "检测到老挝语，请改用 🎤老 按钮识别"
-        }
-        isAutoInserting = true
-        inputText.setText(text)
-        inputText.setSelection(text.length)
-        isAutoInserting = false
-        lastTranslated = ""
-        doTranslate(manual = false)
-    }
-
-    /** Google Cloud STT 录音识别（老挝语，lo-LA） */
-    private var googleSttListening = false
-
-    private fun startGoogleSttListening() {
-        googleSttListening = true
-        isListening = true
-        activeVoiceBtn = voiceLaBtn
-        activeVoiceBtn?.text = "⏹ 聆听中"
-        statusText.text = "🎤 说老挝语…"
-        GoogleStt.startRecording()
-    }
-
-    private fun stopGoogleSttListening() {
-        googleSttListening = false
-        isListening = false
-        activeVoiceBtn?.text = "🎤老"
-        activeVoiceBtn = null
-        statusText.text = "识别中…"
-        val pcm = GoogleStt.stopRecording()
-        if (pcm.isEmpty()) {
-            statusText.text = "没录到声音，请重试"
-            return
-        }
-        val key = Config.googleSttKey(this)
-        lifecycleScope.launch {
-            val result = GoogleStt.recognize(pcm, key)
-            runOnUiThread {
-                if (result.isNullOrBlank()) {
-                    statusText.text = "Google 云端识别失败，请重试"
-                    return@runOnUiThread
-                }
-                handleRecognizedText(result)
-                statusText.text = "✅ 识别成功"
-            }
-        }
-    }
-
+    // ====== 语音输入：直接使用系统 Google 语音输入框（中文/老挝语通用） ======
     private fun startVoiceInput(listenLang: String, forcedDir: Int) {
-        lastListenLang = listenLang
         // 中文语音 -> 中文转老挝语；老挝语音 -> 老挝语转中文
         if (dirMode != forcedDir) {
             dirMode = forcedDir
             updateDirLabel()
         }
-
-        // 检查录音权限
+        // 录音权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
+            != PackageManager.PERMISSION_GRANTED) {
             pendingVoiceLang = listenLang
             pendingVoiceDir = forcedDir
             ActivityCompat.requestPermissions(
@@ -443,59 +187,10 @@ class MainActivity : AppCompatActivity() {
             )
             return
         }
-
-        // 老挝语 + 配置了 Google STT Key → 走 Google Cloud STT 识别
-        if (listenLang == "lo-LA" && Config.googleSttKey(this).isNotBlank()) {
-            startGoogleSttListening()
-            return
-        }
-
-        if (isListening) {
-            // 再点一下停止聆听
-            if (listenLang == "lo-LA" && Config.googleSttKey(this).isNotBlank() && activeVoiceBtn == voiceLaBtn) {
-                stopGoogleSttListening()
-                return
-            }
-            activeVoiceBtn?.text = if (activeVoiceBtn == voiceZhBtn) "🎤中" else "🎤老"
-            isListening = false
-            activeVoiceBtn = null
-            runCatching { speechRecognizer?.stopListening() }
-            return
-        }
-
-        // 异步查询识别服务语言支持
-        checkRecognizerLanguages { supported ->
-            runOnUiThread {
-                if (supported.isNotEmpty() && listenLang !in supported) {
-                    Log.d("LaoTran", "语音服务不支持 $listenLang, supported=$supported, 仍尝试识别")
-                }
-                doStartListening(listenLang)
-            }
-        }
+        // 直接弹系统 Google 语音输入框：中文、老挝语都能可靠识别与区分
+        launchSystemRecognition(listenLang)
     }
 
-    private fun doStartListening(listenLang: String) {
-        activeVoiceBtn = if (listenLang == "zh-CN") voiceZhBtn else voiceLaBtn
-        try {
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                // 老挝语无本地语言包，不指定语言让识别服务自动检测（在线 ASR 覆盖更广）
-                if (listenLang != "lo-LA") {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
-                }
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-            }
-            getRecognizer().startListening(intent)
-            statusText.text = "识别器准备中…"
-        } catch (e: Exception) {
-            statusText.text = "没有可用的语音识别服务"
-            Toast.makeText(this, "没有可用的语音识别服务", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /** 系统识别 Activity（回退路径：应用内 SpeechRecognizer 不可用时） */
     private fun launchSystemRecognition(listenLang: String) {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -664,12 +359,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         autoTranslateJob?.cancel()
-        speechRecognizer?.destroy()
-        speechRecognizer = null
-        if (googleSttListening) {
-            googleSttListening = false
-            GoogleStt.stopRecording()
-        }
         systemTts?.stop()
         systemTts?.shutdown()
         super.onDestroy()
