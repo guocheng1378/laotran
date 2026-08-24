@@ -251,6 +251,20 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 isListening = false
                 resetVoiceButtons()
+                // 应用内 SpeechRecognizer 对老挝语支持差、中文也偶发失败；系统 Google 语音输入框
+                // 更可靠，故任何语言模式下识别明显失败时自动切到系统框（仅一次，避免循环）。
+                val shouldFallback =
+                    error == SpeechRecognizer.ERROR_CLIENT ||
+                    error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+                    error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
+                    error == SpeechRecognizer.ERROR_NO_MATCH ||
+                    error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                if (shouldFallback && !fallbackToSystemTried) {
+                    fallbackToSystemTried = true
+                    statusText.text = "应用内识别失败，改用系统 Google 语音输入框…"
+                    launchSystemRecognition(lastListenLang)
+                    return@runOnUiThread
+                }
                 statusText.text = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没听清，请再试一次"
