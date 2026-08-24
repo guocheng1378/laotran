@@ -64,9 +64,12 @@
         android:paddingEnd="14dp"
         android:paddingTop="7dp"
         android:paddingBottom="7dp"
-        android:text="自动识别方向"
+        android:text="自动识别：中文 ⇄ 老挝语"
         android:textSize="13sp"
         android:textColor="@color/accent_purple"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="翻译方向：点击切换 自动 / 中文转老挝语 / 老挝语转中文"
         android:layout_marginTop="14dp"
         android:layout_marginBottom="12dp" />
 

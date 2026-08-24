@@ -63,10 +63,11 @@ class VoiceInputDialog(
         win.setGravity(Gravity.CENTER)
         win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         win.setDimAmount(0.3f)
-        if (Build.VERSION.SDK_INT >= 31) {
-            win.setBackgroundBlurRadius(60)
-        }
         setContentView(R.layout.dialog_voice)
+        if (Build.VERSION.SDK_INT >= 31) {
+            // decorView 就绪后再设置背景模糊，避免 PhoneWindow.mDecor 为 null 崩溃
+            window?.decorView?.post { window?.setBackgroundBlurRadius(60) }
+        }
 
         findViewById<Button>(R.id.voiceCancel)!!.setOnClickListener { dismiss() }
         startPulse()

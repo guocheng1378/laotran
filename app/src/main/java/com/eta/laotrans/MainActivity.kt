@@ -34,8 +34,8 @@ class MainActivity : AppCompatActivity() {
     // 语音语速（默认 1.0）
     private var speakSpeed: Float = 1.0f
 
-    // 自动方向识别；⇄ 按下后强制取反方向
-    private var forceReverse = false
+    // 方向模式：0 自动识别，1 中文→老挝语，2 老挝语→中文
+    private var dirMode = 0
 
     // 中文朗读：系统 TTS
     private var systemTts: TextToSpeech? = null
@@ -61,7 +61,8 @@ class MainActivity : AppCompatActivity() {
         dirLabel = findViewById(R.id.dirLabel)
 
         findViewById<Button>(R.id.translateBtn).setOnClickListener { doTranslate(manual = true) }
-        findViewById<Button>(R.id.swapBtn).setOnClickListener { toggleForceReverse() }
+        findViewById<Button>(R.id.swapBtn).setOnClickListener { toggleDirection() }
+        dirLabel.setOnClickListener { cycleDirMode() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
         findViewById<Button>(R.id.voiceBtn).setOnClickListener { startVoiceInput() }
@@ -69,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         setupAutoTranslate()
         setupTts()
 
-        dirLabel.text = "自动识别方向"
+        updateDirLabel()
     }
 
     /** 初始化系统 TTS（用于中文朗读） */
@@ -105,22 +106,42 @@ class MainActivity : AppCompatActivity() {
 
     private val autoTranslateRunnable = Runnable { doTranslate(manual = false) }
 
-    /** ⇄ 切换：强制反向，再按一次恢复自动 */
-    private fun toggleForceReverse() {
-        forceReverse = !forceReverse
-        Toast.makeText(
-            this,
-            if (forceReverse) "已强制反向方向，再按一次恢复自动识别" else "已恢复自动识别方向",
-            Toast.LENGTH_SHORT
-        ).show()
+    /** 点击方向胶囊：自动 → 中→老 → 老→中 → 自动 循环 */
+    private fun cycleDirMode() {
+        dirMode = (dirMode + 1) % 3
+        updateDirLabel()
         val text = inputText.text.toString().trim()
         if (text.isNotEmpty()) doTranslate(manual = false)
     }
 
-    /** 计算当前生效方向：默认自动识别；forceReverse 时取反 */
+    /** ⇄ 互换：自动时切到 中→老；已指定方向则交换方向 */
+    private fun toggleDirection() {
+        dirMode = when (dirMode) {
+            0 -> 1
+            1 -> 2
+            else -> 1
+        }
+        updateDirLabel()
+        val text = inputText.text.toString().trim()
+        if (text.isNotEmpty()) doTranslate(manual = false)
+    }
+
+    /** 更新方向胶囊文案 */
+    private fun updateDirLabel() {
+        dirLabel.text = when (dirMode) {
+            1 -> "中文 → 老挝语"
+            2 -> "老挝语 → 中文"
+            else -> "自动识别：中文 ⇄ 老挝语"
+        }
+    }
+
+    /** 计算当前生效方向：自动识别或用户指定 */
     private fun effectiveDirection(text: String): Pair<String, String> {
-        val (s, t) = TranslateEngine.autoDetect(text)
-        return if (forceReverse) t to s else s to t
+        return when (dirMode) {
+            1 -> "zh" to "lo"
+            2 -> "lo" to "zh"
+            else -> TranslateEngine.autoDetect(text)
+        }
     }
 
     private fun label(code: String) = if (code == "zh") "中文" else "老挝语"
@@ -232,12 +253,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 自动识别（或强制）方向
+        // 自动识别或用户指定方向
         val (src, tgt) = effectiveDirection(text)
-        dirLabel.text = buildString {
-            append("${label(src)} → ${label(tgt)}")
-            if (forceReverse) append("（已反向）")
-        }
+        updateDirLabel()
+        statusText.text = "${label(src)} → ${label(tgt)}"
 
         if (text == lastTranslated && resultText.text.isNotEmpty() && !manual) return
 
