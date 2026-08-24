@@ -92,6 +92,62 @@
         android:text="🔊 朗读"
         android:layout_marginTop="12dp"/>
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="语速"
+            android:textSize="13sp"
+            android:textColor="#6650a4"/>
+
+        <RadioGroup
+            android:id="@+id/speedGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp">
+
+            <RadioButton
+                android:id="@+id/speed075"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.75"
+                android:textSize="13sp"/>
+            <RadioButton
+                android:id="@+id/speed100"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.0"
+                android:textSize="13sp"
+                android:checked="true"/>
+            <RadioButton
+                android:id="@+id/speed125"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.25"
+                android:textSize="13sp"/>
+            <RadioButton
+                android:id="@+id/speed150"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.5"
+                android:textSize="13sp"/>
+            <RadioButton
+                android:id="@+id/speed200"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2.0"
+                android:textSize="13sp"/>
+        </RadioGroup>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/statusText"
         android:layout_width="match_parent"
