@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.inputmethod.InputMethodManager
@@ -17,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,19 +27,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var dirLabel: TextView
 
-    // 当前方向：默认 中文 → 老挝语
-    private var source: String = "zh"
-    private var target: String = "lo"
-    private var lastResult: String = ""
-
     // 语音语速（默认 1.0）
     private var speakSpeed: Float = 1.0f
+
+    // 自动方向识别；⇄ 按下后强制取反方向
+    private var forceReverse = false
+    private var currentTarget = "lo"
+
+    // 中文朗读：系统 TTS
+    private var systemTts: TextToSpeech? = null
+    private var ttsReady = false
 
     // 防抖自动翻译
     private val handler = Handler(Looper.getMainLooper())
     private var autoTranslateJob: Job? = null
-    private var isAutoInserting = false   // 程序填入文本（如语音识别结果）时暂停自动翻译
-    private var lastTranslated: String = "" // 上次已翻译的原文，避免重复请求
+    private var isAutoInserting = false
+    private var lastTranslated: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,12 +54,25 @@ class MainActivity : AppCompatActivity() {
         dirLabel = findViewById(R.id.dirLabel)
 
         findViewById<Button>(R.id.translateBtn).setOnClickListener { doTranslate(manual = true) }
-        findViewById<Button>(R.id.swapBtn).setOnClickListener { swapDirection() }
+        findViewById<Button>(R.id.swapBtn).setOnClickListener { toggleForceReverse() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
         findViewById<Button>(R.id.voiceBtn).setOnClickListener { openKeyboardVoice() }
         setupSpeedControl()
         setupAutoTranslate()
+        setupTts()
+
+        dirLabel.text = "自动识别方向"
+    }
+
+    /** 初始化系统 TTS（用于中文朗读） */
+    private fun setupTts() {
+        systemTts = TextToSpeech(this) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (ttsReady) {
+                systemTts?.language = Locale.CHINA
+            }
+        }
     }
 
     /** 输入停顿 600ms 后自动翻译（流式） */
@@ -67,11 +85,12 @@ class MainActivity : AppCompatActivity() {
                 handler.removeCallbacks(autoTranslateRunnable)
                 val text = s?.toString()?.trim().orEmpty()
                 if (text.isEmpty()) {
+                    lastTranslated = ""
                     resultText.text = ""
                     statusText.text = ""
                     return
                 }
-                if (text == lastTranslated) return // 内容未变不重复翻译
+                if (text == lastTranslated) return
                 handler.postDelayed(autoTranslateRunnable, 600)
             }
         })
@@ -79,36 +98,30 @@ class MainActivity : AppCompatActivity() {
 
     private val autoTranslateRunnable = Runnable { doTranslate(manual = false) }
 
-    private fun swapDirection() {
-        val old = source
-        source = target
-        target = old
-        updateDirLabel()
-        Toast.makeText(this, "已切换：${label(source)} → ${label(target)}", Toast.LENGTH_SHORT).show()
-        // 方向切换后重新翻译当前内容
+    /** ⇄ 切换：强制反向（老挝语输入也译成老挝语等），再按一次恢复自动 */
+    private fun toggleForceReverse() {
+        forceReverse = !forceReverse
+        Toast.makeText(
+            this,
+            if (forceReverse) "已强制反向方向，再按一次恢复自动识别" else "已恢复自动识别方向",
+            Toast.LENGTH_SHORT
+        ).show()
         val text = inputText.text.toString().trim()
         if (text.isNotEmpty()) doTranslate(manual = false)
     }
 
-    private fun updateDirLabel() {
-        dirLabel.text = "${label(source)} → ${label(target)}"
+    /**
+     * 计算当前生效方向：默认按输入内容自动识别；forceReverse 时取反。
+     */
+    private fun effectiveDirection(text: String): Pair<String, String> {
+        val (s, t) = TranslateEngine.autoDetect(text)
+        return if (forceReverse) t to s else s to t
     }
 
     private fun label(code: String) = if (code == "zh") "中文" else "老挝语"
 
     private fun showSettings() {
-        SettingsDialog.show(this) { refreshConfigStatus() }
-    }
-
-    private fun refreshConfigStatus() {
-        val configured = Config.isConfigured(this)
-        val model = Config.model(this)
-        val hint = if (configured && model.isNotBlank()) {
-            "已配置：${Config.baseUrl(this)} · ${model}"
-        } else {
-            "未配置翻译服务，请点击 ⚙️ 设置"
-        }
-        statusText.text = hint
+        SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
     // ====== 语音输入：改由系统键盘的语音听写提供 ======
@@ -117,19 +130,6 @@ class MainActivity : AppCompatActivity() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(inputText, InputMethodManager.SHOW_IMPLICIT)
         statusText.text = "请在键盘上点击麦克风图标语音输入"
-    }
-
-    /**
-     * 程序向输入框填入文本时使用（避免触发自动翻译循环）。
-     * 填入后立即手动翻译一次。
-     */
-    private fun insertProgrammatically(text: String) {
-        isAutoInserting = true
-        inputText.setText(text)
-        inputText.setSelection(text.length)
-        isAutoInserting = false
-        handler.removeCallbacks(autoTranslateRunnable)
-        doTranslate(manual = false)
     }
 
     // ====== 翻译 ======
@@ -144,6 +144,15 @@ class MainActivity : AppCompatActivity() {
             if (manual) showSettings()
             return
         }
+
+        // 自动识别（或强制）方向
+        val (src, tgt) = effectiveDirection(text)
+        currentTarget = tgt
+        dirLabel.text = buildString {
+            append("${label(src)} → ${label(tgt)}")
+            if (forceReverse) append("（已反向）")
+        }
+
         if (text == lastTranslated && resultText.text.isNotEmpty() && !manual) return
 
         statusText.text = "翻译中…"
@@ -152,19 +161,15 @@ class MainActivity : AppCompatActivity() {
             try {
                 val full = StringBuilder()
                 val result = TranslateEngine.translateStream(
-                    this@MainActivity, text, source, target
+                    this@MainActivity, text, src, tgt
                 ) { delta ->
                     full.append(delta)
-                    // 流式增量回主线程更新界面
-                    runOnUiThread {
-                        resultText.text = full.toString()
-                    }
+                    runOnUiThread { resultText.text = full.toString() }
                 }
-                lastResult = result
                 lastTranslated = text
                 resultText.text = result
-                // 翻译结果是老挝语时，自动触发朗读
-                if (target == "lo") {
+                // 翻译成老挝语时自动朗读（在线 MMS）；译成中文不自动读
+                if (tgt == "lo") {
                     statusText.text = "翻译完成，正在朗读…"
                     doSpeak()
                 } else {
@@ -172,8 +177,7 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 if (!manual && text != inputText.text.toString().trim()) {
-                    // 用户已继续输入，忽略这次过期的失败
-                    return@launch
+                    return@launch // 用户已继续输入，忽略过期失败
                 }
                 statusText.text = "翻译失败：${e.message}"
             }
@@ -186,18 +190,35 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
             return
         }
-        // 若翻译结果含「转写：」行，朗读时只取老挝语原文部分
-        val text = if (full.contains("转写：")) full.substringBefore("转写：").trim() else full
-        if (text.isEmpty()) {
+        // 去掉「转写：」「拼音：」行，只读译文本体
+        val body = full.substringBefore("转写：").substringBefore("拼音：").trim()
+        if (body.isEmpty()) {
             Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
             return
         }
-        statusText.text = "正在合成老挝语音…"
         lifecycleScope.launch {
-            val ok = LaoSpeech.speak(text, this@MainActivity, speakSpeed)
-            statusText.text = if (ok) "发音成功 🔊" else "发音失败"
+            if (TranslateEngine.containsLao(body)) {
+                // 老挝语：在线 MMS 合成
+                statusText.text = "正在合成老挝语音…"
+                val ok = LaoSpeech.speak(body, this@MainActivity, speakSpeed)
+                statusText.text = if (ok) "发音成功 🔊" else "发音失败"
+            } else {
+                // 中文/其他：系统 TTS
+                statusText.text = "正在合成语音…"
+                val ok = speakWithSystemTts(body)
+                statusText.text = if (ok) "发音成功 🔊" else "本机没有可用的中文语音引擎"
+            }
         }
     }
+
+    private suspend fun speakWithSystemTts(text: String): Boolean =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            val tts = systemTts
+            if (!ttsReady || tts == null) return@withContext false
+            tts.setSpeechRate(speakSpeed)
+            val r = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "laotrans_tts_${System.currentTimeMillis()}")
+            r == TextToSpeech.SUCCESS
+        }
 
     private fun setupSpeedControl() {
         val prefs = getSharedPreferences("laotrans_prefs", MODE_PRIVATE)
@@ -224,6 +245,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         autoTranslateJob?.cancel()
+        systemTts?.stop()
+        systemTts?.shutdown()
         super.onDestroy()
     }
 }
