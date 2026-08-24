@@ -61,7 +61,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="🎤 语音输入"
+            android:text="🎤 语音"
+            android:textSize="15sp"
             android:layout_marginEnd="8dp"/>
 
         <Button
@@ -70,6 +71,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="翻译"
+            android:textSize="15sp"
             android:layout_marginEnd="8dp"/>
 
         <Button
@@ -77,7 +79,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="⇄ 互换"/>
+            android:text="⇄ 互换"
+            android:textSize="15sp"/>
     </LinearLayout>
 
     <TextView
