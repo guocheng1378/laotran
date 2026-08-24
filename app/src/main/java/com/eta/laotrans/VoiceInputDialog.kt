@@ -32,7 +32,6 @@ class VoiceInputDialog(
     private var recognizer: SpeechRecognizer? = null
     private var pulseAnim: android.animation.ValueAnimator? = null
 
-    companion object
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val win = window ?: return

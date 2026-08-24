@@ -167,20 +167,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 优先用自绘玻璃弹窗，服务不可用时回退系统识别 Activity
-        if (VoiceInputDialog.resolveService(this) != null) {
-            VoiceInputDialog(this, listenLang) { recognized ->
-                isAutoInserting = true
-                inputText.setText(recognized)
-                inputText.setSelection(recognized.length)
-                lastTranslated = ""
-                doTranslate(manual = false)
-                isAutoInserting = false
-            }.show()
-            statusText.text = "正在聆听…"
-        } else {
-            launchSystemRecognition(listenLang)
-        }
+        // 自绘玻璃弹窗，绑定系统默认识别服务
+        VoiceInputDialog(this, listenLang) { recognized ->
+            isAutoInserting = true
+            inputText.setText(recognized)
+            inputText.setSelection(recognized.length)
+            lastTranslated = ""
+            doTranslate(manual = false)
+            isAutoInserting = false
+        }.show()
+        statusText.text = "正在聆听…"
+
     }
 
     /** 回退：系统识别 Activity（Google 对话框） */
