@@ -1,14 +1,12 @@
 package com.eta.laotrans
 
 import android.app.Activity
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognitionListener
-import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.Gravity
@@ -34,24 +32,7 @@ class VoiceInputDialog(
     private var recognizer: SpeechRecognizer? = null
     private var pulseAnim: android.animation.ValueAnimator? = null
 
-    companion object {
-        /** 解析设备上可用的识别服务组件，优先 Google；找不到返回 null */
-        fun resolveService(context: Context): ComponentName? {
-            return try {
-                val intent = Intent(RecognitionService.SERVICE_INTERFACE)
-                val infos = context.packageManager.queryIntentServices(intent, 0)
-                if (infos.isEmpty()) return null
-                val google = infos.firstOrNull {
-                    it.serviceInfo.packageName.contains("google", ignoreCase = true)
-                }
-                val target = google ?: infos.first()
-                ComponentName(target.serviceInfo.packageName, target.serviceInfo.name)
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-
+    companion object
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val win = window ?: return
@@ -75,13 +56,8 @@ class VoiceInputDialog(
     }
 
     private fun startRecognition() {
-        val service = resolveService(activity)
-        if (service == null) {
-            statusText().text = "本机没有可用的语音识别服务"
-            return
-        }
         try {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(activity, service)
+            recognizer = SpeechRecognizer.createSpeechRecognizer(activity)
         } catch (e: Exception) {
             statusText().text = "无法连接识别服务"
             return
