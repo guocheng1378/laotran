@@ -279,7 +279,8 @@ class MainActivity : AppCompatActivity() {
                 }
                 // 老挝语识别模式下检查结果是否真的含老挝文字
                 if (lastListenLang == "lo-LA" && !containsLaoScript(text)) {
-                    statusText.text = "识别结果不是老挝语（系统语音服务不支持老挝语识别），请改用文字输入"
+                    Log.d("LaoTran", "lo-LA 识别结果非老挝文: $text")
+                    statusText.text = "识别结果不是老挝语，请重试"
                     // 仍填入，让用户看到实际结果
                 } else if (lastListenLang == "zh-CN" && containsLaoScript(text)) {
                     statusText.text = "检测到老挝语，请改用 🎤老 按钮识别"
@@ -395,8 +396,11 @@ class MainActivity : AppCompatActivity() {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
+                // 老挝语无本地语言包，不指定语言让识别服务自动检测（在线 ASR 覆盖更广）
+                if (listenLang != "lo-LA") {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
+                }
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
