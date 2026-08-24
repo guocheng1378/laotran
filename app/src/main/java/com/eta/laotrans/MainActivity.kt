@@ -1,6 +1,5 @@
 package com.eta.laotrans
 
-import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,10 +8,10 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.EditText
-import android.widget.TextView
-import android.widget.Toast
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
@@ -31,7 +30,6 @@ class MainActivity : AppCompatActivity() {
 
     // 自动方向识别；⇄ 按下后强制取反方向
     private var forceReverse = false
-    private var currentTarget = "lo"
 
     // 中文朗读：系统 TTS
     private var systemTts: TextToSpeech? = null
@@ -97,7 +95,7 @@ class MainActivity : AppCompatActivity() {
 
     private val autoTranslateRunnable = Runnable { doTranslate(manual = false) }
 
-    /** ⇄ 切换：强制反向（老挝语输入也译成老挝语等），再按一次恢复自动 */
+    /** ⇄ 切换：强制反向，再按一次恢复自动 */
     private fun toggleForceReverse() {
         forceReverse = !forceReverse
         Toast.makeText(
@@ -109,9 +107,7 @@ class MainActivity : AppCompatActivity() {
         if (text.isNotEmpty()) doTranslate(manual = false)
     }
 
-    /**
-     * 计算当前生效方向：默认按输入内容自动识别；forceReverse 时取反。
-     */
+    /** 计算当前生效方向：默认自动识别；forceReverse 时取反 */
     private fun effectiveDirection(text: String): Pair<String, String> {
         val (s, t) = TranslateEngine.autoDetect(text)
         return if (forceReverse) t to s else s to t
@@ -125,9 +121,9 @@ class MainActivity : AppCompatActivity() {
 
     // ====== 语音输入：系统 SpeechRecognizer（Collins 同款） ======
     private fun startVoiceInput() {
-        // 听写语言与翻译方向相反：要把中文译成老挝语，就听写中文；反之听老挝语
+        // 听写语言与翻译方向相反：译成老挝语就听写中文，反之听老挝语
         val text = inputText.text.toString().trim()
-        val (_, tgt) = effectiveDirection(text.ifEmpty { "" })
+        val (_, tgt) = effectiveDirection(text)
         val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
 
         if (!SpeechInput.isAvailable(this)) {
@@ -135,14 +131,19 @@ class MainActivity : AppCompatActivity() {
             return
         }
         statusText.text = "正在聆听…"
-        SpeechInput.start(this, listenLang) { recognized ->
-            isAutoInserting = true
-            inputText.setText(recognized)
-            inputText.setSelection(recognized.length)
-            isAutoInserting = false
-            lastTranslated = ""
-            doTranslate(manual = false)
-        }
+        SpeechInput.start(
+            this,
+            listenLang,
+            onStatus = { s -> statusText.text = s },
+            onResult = { recognized ->
+                isAutoInserting = true
+                inputText.setText(recognized)
+                inputText.setSelection(recognized.length)
+                lastTranslated = ""
+                doTranslate(manual = false)
+                isAutoInserting = false
+            }
+        )
     }
 
     override fun onRequestPermissionsResult(
@@ -169,7 +170,6 @@ class MainActivity : AppCompatActivity() {
 
         // 自动识别（或强制）方向
         val (src, tgt) = effectiveDirection(text)
-        currentTarget = tgt
         dirLabel.text = buildString {
             append("${label(src)} → ${label(tgt)}")
             if (forceReverse) append("（已反向）")
