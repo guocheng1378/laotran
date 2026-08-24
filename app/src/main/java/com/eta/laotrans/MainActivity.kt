@@ -71,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
         findViewById<Button>(R.id.historyBtn).setOnClickListener { openHistory() }
+        findViewById<Button>(R.id.clearBtn).setOnClickListener { clearInput() }
         voiceZhBtn = findViewById(R.id.voiceZhBtn)
         voiceLaBtn = findViewById(R.id.voiceLaBtn)
         voiceZhBtn.setOnClickListener { startVoiceInput("zh-CN", 1) }
@@ -161,7 +162,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSettings() {
-        SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
+        val before = Config.locale(this)
+        SettingsDialog.show(this) {
+            val after = Config.locale(this)
+            if (before != after) {
+                recreate()
+            }
+        }
+    }
+
+    /** 一键清空输入与结果 */
+    private fun clearInput() {
+        isAutoInserting = true
+        inputText.setText("")
+        inputText.setSelection(0)
+        isAutoInserting = false
+        lastTranslated = ""
+        resultText.text = ""
+        statusText.text = ""
     }
 
     // ====== 语音输入：直接使用系统 Google 语音输入框（中文/老挝语通用） ======
