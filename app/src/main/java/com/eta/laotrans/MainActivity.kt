@@ -7,7 +7,9 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
@@ -47,8 +49,9 @@ class MainActivity : AppCompatActivity() {
     private var isAutoInserting = false
     private var lastTranslated: String = ""
 
-    // 语音输入
-    private val REQ_SPEECH = 4002
+    // 语音输入：应用内 SpeechRecognizer（自绘界面，识别器就绪后才提示说话）
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
     private val REQ_RECORD_AUDIO = 4003
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,6 +72,9 @@ class MainActivity : AppCompatActivity() {
         setupSpeedControl()
         setupAutoTranslate()
         setupTts()
+
+        // 预热语音识别服务：提前绑定，避免首次点击时冷启动导致识别失败
+        runCatching { getRecognizer() }
 
         updateDirLabel()
     }
@@ -150,7 +156,84 @@ class MainActivity : AppCompatActivity() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
-    // ====== 语音输入：玻璃弹窗 → SpeechRecognizer 服务绑定 ======
+    // ====== 语音输入：应用内 SpeechRecognizer ======
+    private fun getRecognizer(): SpeechRecognizer {
+        if (speechRecognizer == null) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                setRecognitionListener(speechListener)
+            }
+        }
+        return speechRecognizer!!
+    }
+
+    private val speechListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {
+            // 识别器真正就绪，此时提示说话才能录上
+            runOnUiThread {
+                isListening = true
+                setVoiceBtn("⏹ 聆听中…")
+                statusText.text = "请说话…"
+            }
+        }
+
+        override fun onBeginningOfSpeech() {}
+
+        override fun onRmsChanged(rmsdB: Float) {}
+
+        override fun onBufferReceived(buffer: ByteArray?) {}
+
+        override fun onEndOfSpeech() {
+            runOnUiThread { statusText.text = "识别中…" }
+        }
+
+        override fun onError(error: Int) {
+            runOnUiThread {
+                isListening = false
+                setVoiceBtn("🎤")
+                statusText.text = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH,
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没听清，请再试一次"
+                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
+                    SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "语音服务不支持当前语言，请改用文字输入"
+                    SpeechRecognizer.ERROR_NETWORK,
+                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络异常，请检查网络后重试"
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音服务忙，请稍后再试"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
+                    else -> "识别失败（$error），请重试"
+                }
+            }
+        }
+
+        override fun onResults(results: Bundle?) {
+            runOnUiThread {
+                isListening = false
+                setVoiceBtn("🎤")
+                val text = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    ?.trim()
+                if (text.isNullOrEmpty()) {
+                    statusText.text = "没听清，请再试一次"
+                    return@runOnUiThread
+                }
+                isAutoInserting = true
+                inputText.setText(text)
+                inputText.setSelection(text.length)
+                isAutoInserting = false
+                lastTranslated = ""
+                doTranslate(manual = false)
+            }
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {}
+
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    private fun setVoiceBtn(label: String) {
+        findViewById<Button>(R.id.voiceBtn).text = label
+    }
+
     private fun startVoiceInput() {
         // 听写语言与翻译方向相反：译成老挝语就听写中文，反之听老挝语
         val text = inputText.text.toString().trim()
@@ -167,25 +250,25 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 系统识别 Activity（前台录音，规避 HyperOS 对后台识别服务的静音）
-        launchSystemRecognition(listenLang)
-    }
+        if (isListening) {
+            // 再点一下停止聆听
+            runCatching { speechRecognizer?.stopListening() }
+            return
+        }
 
-    /** 系统识别 Activity（Google / 小爱语音，前台录音不会被静音） */
-    private fun launchSystemRecognition(listenLang: String) {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "请说话…")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             }
-            startActivityForResult(intent, REQ_SPEECH)
-            statusText.text = "正在聆听…"
+            getRecognizer().startListening(intent)
+            statusText.text = "识别器准备中…"
         } catch (e: Exception) {
-            statusText.text = "没有可用的语音识别应用"
-            Toast.makeText(this, "没有可用的语音识别应用", Toast.LENGTH_SHORT).show()
+            statusText.text = "没有可用的语音识别服务"
+            Toast.makeText(this, "没有可用的语音识别服务", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -202,30 +285,6 @@ class MainActivity : AppCompatActivity() {
                 statusText.text = "未授予录音权限"
             }
         }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQ_SPEECH) return
-        if (resultCode != Activity.RESULT_OK) {
-            statusText.text = "已取消"
-            return
-        }
-        val text = data
-            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
-            ?.trim()
-        if (text.isNullOrEmpty()) {
-            statusText.text = "没听清，请再试一次"
-            return
-        }
-        isAutoInserting = true
-        inputText.setText(text)
-        inputText.setSelection(text.length)
-        lastTranslated = ""
-        doTranslate(manual = false)
-        isAutoInserting = false
     }
 
     // ====== 翻译 ======
@@ -338,6 +397,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         autoTranslateJob?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         systemTts?.stop()
         systemTts?.shutdown()
         super.onDestroy()
