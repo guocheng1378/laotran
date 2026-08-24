@@ -3,106 +3,90 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="20dp"
-    android:background="#F5F5FF">
+    android:fitsSystemWindows="true"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="16dp">
 
+    <!-- 顶部：标题 + 设置 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="老挝语 ↔ 中文 翻译"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:textColor="#333333"/>
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="老挝语翻译"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:letterSpacing="0.02" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lao · 中文 · 语音互译"
+                android:textSize="12sp"
+                android:textColor="@color/text_hint"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/settingsBtn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="⚙️ 设置"/>
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:background="@drawable/bg_glass_card"
+            android:text="⚙️"
+            android:textSize="22sp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp" />
     </LinearLayout>
 
+    <!-- 方向胶囊 -->
     <TextView
         android:id="@+id/dirLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="中文 → 老挝语"
-        android:textSize="14sp"
-        android:textColor="#6650a4"
-        android:layout_marginBottom="12dp"/>
+        android:background="@drawable/bg_glass_chip"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:text="自动识别方向"
+        android:textSize="13sp"
+        android:textColor="@color/accent_purple"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="12dp" />
 
+    <!-- 输入玻璃卡片 -->
     <EditText
         android:id="@+id/inputText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="120dp"
+        android:minHeight="130dp"
         android:gravity="top|start"
-        android:background="#FFFFFF"
-        android:padding="12dp"
+        android:background="@drawable/bg_glass_input"
+        android:padding="16dp"
         android:hint="输入要翻译的文字…"
+        android:hintTextColor="@color/text_hint"
+        android:textColor="@color/text_primary"
+        android:textSize="16sp"
         android:inputType="textMultiLine"
-        android:minLines="4"
-        android:textSize="16sp"/>
+        android:minLines="4" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="12dp">
-
-        <Button
-            android:id="@+id/voiceBtn"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🎤 语音"
-            android:textSize="15sp"
-            android:layout_marginEnd="8dp"/>
-
-        <Button
-            android:id="@+id/translateBtn"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="翻译"
-            android:textSize="15sp"
-            android:layout_marginEnd="8dp"/>
-
-        <Button
-            android:id="@+id/swapBtn"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="⇄ 互换"
-            android:textSize="15sp"/>
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/resultText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="100dp"
-        android:gravity="top|start"
-        android:background="#FFFFFF"
-        android:padding="12dp"
-        android:textSize="18sp"
-        android:textColor="#222222"
-        android:text=""
-        android:layout_marginTop="12dp"/>
-
-    <Button
-        android:id="@+id/speakBtn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="🔊 朗读"
-        android:layout_marginTop="12dp"/>
-
+    <!-- 操作行：语音 / 翻译 / 互换 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -110,52 +94,168 @@
         android:gravity="center_vertical"
         android:layout_marginTop="12dp">
 
+        <Button
+            android:id="@+id/voiceBtn"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:background="@drawable/bg_mic_circle"
+            android:text="🎤"
+            android:textSize="26sp"
+            android:contentDescription="语音输入"
+            android:layout_marginEnd="10dp" />
+
+        <Button
+            android:id="@+id/translateBtn"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:background="@drawable/bg_glass_primary"
+            android:text="翻 译"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:letterSpacing="0.1"
+            android:layout_marginEnd="10dp" />
+
+        <Button
+            android:id="@+id/swapBtn"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:background="@drawable/bg_glass_secondary"
+            android:text="⇄ 互换"
+            android:textSize="15sp"
+            android:textColor="@color/text_primary" />
+    </LinearLayout>
+
+    <!-- 结果玻璃卡片 -->
+    <TextView
+        android:id="@+id/resultText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="110dp"
+        android:gravity="top|start"
+        android:background="@drawable/bg_glass_card"
+        android:padding="16dp"
+        android:textSize="18sp"
+        android:textColor="@color/text_primary"
+        android:lineSpacingExtra="4dp"
+        android:text=""
+        android:layout_marginTop="12dp" />
+
+    <!-- 朗读 -->
+    <Button
+        android:id="@+id/speakBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
+        android:minWidth="0dp"
+        android:minHeight="0dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:background="@drawable/bg_glass_secondary"
+        android:text="🔊 朗读"
+        android:textSize="15sp"
+        android:textColor="@color/text_primary"
+        android:layout_marginTop="12dp" />
+
+    <!-- 语速分段控件 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="12dp">
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="语速"
-            android:textSize="13sp"
-            android:textColor="#6650a4"/>
+            android:text="朗读语速"
+            android:textSize="12sp"
+            android:textColor="@color/text_hint" />
 
         <RadioGroup
             android:id="@+id/speedGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginStart="8dp">
+            android:background="@drawable/bg_glass_pill"
+            android:padding="4dp"
+            android:layout_marginTop="6dp">
 
             <RadioButton
                 android:id="@+id/speed075"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
                 android:text="0.75"
-                android:textSize="13sp"/>
+                android:textSize="12sp"
+                android:textColor="@color/text_seg_selector" />
+
             <RadioButton
                 android:id="@+id/speed100"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
                 android:text="1.0"
-                android:textSize="13sp"
-                android:checked="true"/>
+                android:textSize="12sp"
+                android:textColor="@color/text_seg_selector"
+                android:checked="true" />
+
             <RadioButton
                 android:id="@+id/speed125"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
                 android:text="1.25"
-                android:textSize="13sp"/>
+                android:textSize="12sp"
+                android:textColor="@color/text_seg_selector" />
+
             <RadioButton
                 android:id="@+id/speed150"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
                 android:text="1.5"
-                android:textSize="13sp"/>
+                android:textSize="12sp"
+                android:textColor="@color/text_seg_selector" />
+
             <RadioButton
                 android:id="@+id/speed200"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
                 android:text="2.0"
-                android:textSize="13sp"/>
+                android:textSize="12sp"
+                android:textColor="@color/text_seg_selector" />
         </RadioGroup>
     </LinearLayout>
 
@@ -164,7 +264,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="#888888"
-        android:layout_marginTop="8dp"/>
+        android:textColor="@color/text_hint"
+        android:layout_marginTop="10dp" />
 
 </LinearLayout>

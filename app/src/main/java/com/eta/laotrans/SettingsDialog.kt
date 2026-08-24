@@ -1,19 +1,23 @@
 package com.eta.laotrans
 
 import android.content.Context
+import android.graphics.drawable.ColorDrawable
+import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置弹窗：填写 接口地址 / API Key / 模型。
+ * 设置弹窗：液态玻璃风格，填写 接口地址 / API Key / 模型。
  * 支持「拉取模型」—— 用当前填的地址+key 调用该接口的 /models，
  * 列出可用模型供选择，选中后自动回填到模型输入框。
  */
@@ -35,19 +39,34 @@ object SettingsDialog {
         modelEdit.setText(Config.model(context))
         fetchStatus.text = lastStatus
 
-        val dialog = AlertDialog.Builder(context)
-            .setTitle("⚙️ 大模型设置")
-            .setView(view)
-            .setPositiveButton("保存") { _, _ ->
-                Config.save(context, baseUrlEdit.text.toString(), apiKeyEdit.text.toString(), modelEdit.text.toString())
-                lastStatus = "已保存"
-                onSaved()
-            }
-            .setNegativeButton("取消", null)
-            .create()
+        val dialog = AppCompatDialog(context)
+        dialog.setContentView(view)
+        dialog.window?.let { w ->
+            w.setBackgroundDrawable(ColorDrawable(0x00000000))
+            w.setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT
+            )
+            w.setGravity(Gravity.BOTTOM)
+            w.setDimAmount(0.35f)
+            w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
 
         // 用 Activity 的生命周期协程作用域
         val scope = (context as? AppCompatActivity)?.lifecycleScope
+
+        view.findViewById<Button>(R.id.cancelBtn).setOnClickListener { dialog.dismiss() }
+        view.findViewById<Button>(R.id.saveBtn).setOnClickListener {
+            Config.save(
+                context,
+                baseUrlEdit.text.toString(),
+                apiKeyEdit.text.toString(),
+                modelEdit.text.toString()
+            )
+            lastStatus = "已保存"
+            dialog.dismiss()
+            onSaved()
+        }
 
         fetchBtn.setOnClickListener {
             val baseUrl = baseUrlEdit.text.toString().trim()

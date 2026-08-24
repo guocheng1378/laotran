@@ -1,7 +1,9 @@
 package com.eta.laotrans
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,11 +13,12 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.EditText
-import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -44,8 +47,9 @@ class MainActivity : AppCompatActivity() {
     private var isAutoInserting = false
     private var lastTranslated: String = ""
 
-    // 语音输入（系统识别 Activity）
+    // 语音输入
     private val REQ_SPEECH = 4002
+    private val REQ_RECORD_AUDIO = 4003
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -125,19 +129,44 @@ class MainActivity : AppCompatActivity() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
-    // ====== 语音输入：系统识别 Activity（自带录音与 UI） ======
+    // ====== 语音输入：玻璃弹窗 → SpeechRecognizer 服务绑定 ======
     private fun startVoiceInput() {
         // 听写语言与翻译方向相反：译成老挝语就听写中文，反之听老挝语
         val text = inputText.text.toString().trim()
         val (_, tgt) = effectiveDirection(text)
         val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
 
+        // 检查录音权限
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_RECORD_AUDIO
+            )
+            return
+        }
+
+        // 优先用自绘玻璃弹窗，服务不可用时回退系统识别 Activity
+        if (VoiceInputDialog.resolveService(this) != null) {
+            VoiceInputDialog(this, listenLang) { recognized ->
+                isAutoInserting = true
+                inputText.setText(recognized)
+                inputText.setSelection(recognized.length)
+                lastTranslated = ""
+                doTranslate(manual = false)
+                isAutoInserting = false
+            }.show()
+            statusText.text = "正在聆听…"
+        } else {
+            launchSystemRecognition(listenLang)
+        }
+    }
+
+    /** 回退：系统识别 Activity（Google 对话框） */
+    private fun launchSystemRecognition(listenLang: String) {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
@@ -148,6 +177,21 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             statusText.text = "没有可用的语音识别应用"
             Toast.makeText(this, "没有可用的语音识别应用", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_RECORD_AUDIO) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                startVoiceInput()
+            } else {
+                statusText.text = "未授予录音权限"
+            }
         }
     }
 
