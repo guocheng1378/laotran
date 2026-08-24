@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -21,6 +22,8 @@ import java.util.concurrent.TimeUnit
  * 翻译成老挝语时输出两行：老挝语译文 + 「转写：<罗马音>」。
  * 翻译成中文时输出两行：中文译文 + 「拼音：<汉语拼音>」。
  * 支持 [translateStream] 流式翻译：边生成边通过 onDelta 回调显示。
+ *
+ * 已内置 LRU 翻译缓存：相同来源/目标/文本会直接命中缓存，跳过 LLM 请求，显著提速。
  */
 object TranslateEngine {
 
@@ -34,6 +37,22 @@ object TranslateEngine {
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
+
+    // ====== 翻译缓存（LRU） ======
+
+    private const val CACHE_MAX = 64
+    private val cache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > CACHE_MAX
+    }
+
+    private fun cacheKey(source: String, target: String, text: String) = "$source|$target|$text"
+
+    private fun cacheGet(key: String): String? = synchronized(cache) { cache[key] }
+
+    private fun cachePut(key: String, value: String) {
+        if (value.isBlank()) return
+        synchronized(cache) { cache[key] = value }
+    }
 
     // ====== 语言检测 ======
 
@@ -84,10 +103,13 @@ object TranslateEngine {
      */
     suspend fun translate(context: Context, text: String, source: String, target: String): String =
         withContext(Dispatchers.IO) {
+            val key = cacheKey(source, target, text)
+            cacheGet(key)?.let { return@withContext it }
+
             val baseUrl = Config.baseUrl(context)
-            val key = Config.apiKey(context)
+            val keyToken = Config.apiKey(context)
             val model = Config.model(context)
-            if (key.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
+            if (keyToken.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
             if (model.isBlank()) throw IllegalStateException("请先在设置里选择模型（⚙️ 设置）")
 
             val srcName = if (source == "lo") "老挝语" else "中文"
@@ -103,10 +125,10 @@ object TranslateEngine {
             val req = Request.Builder()
                 .url(baseUrl.trimEnd('/') + "/chat/completions")
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
-                .header("Authorization", "Bearer $key")
+                .header("Authorization", "Bearer $keyToken")
                 .build()
 
-            client.newCall(req).execute().use { resp ->
+            val result = client.newCall(req).execute().use { resp ->
                 val respBody = resp.body?.string() ?: throw IllegalStateException("空响应")
                 if (!resp.isSuccessful) {
                     throw IllegalStateException("翻译请求失败 HTTP ${resp.code}: $respBody")
@@ -117,11 +139,13 @@ object TranslateEngine {
                     .getString("content")
                     .trim()
             }
+            cachePut(key, result)
+            result
         }
 
     /**
      * 流式翻译：SSE 边生成边回调。onDelta 在后台线程被调用；
-     * 返回完整拼接结果。失败抛异常。
+     * 返回完整拼接结果。失败抛异常。命中缓存时一次性回调完整结果。
      */
     suspend fun translateStream(
         context: Context,
@@ -130,10 +154,17 @@ object TranslateEngine {
         target: String,
         onDelta: (String) -> Unit
     ): String = withContext(Dispatchers.IO) {
+        val key = cacheKey(source, target, text)
+        cacheGet(key)?.let { cached ->
+            // 命中缓存：直接回调完整结果，跳过 LLM 请求
+            onDelta(cached)
+            return@withContext cached
+        }
+
         val baseUrl = Config.baseUrl(context)
-        val key = Config.apiKey(context)
+        val keyToken = Config.apiKey(context)
         val model = Config.model(context)
-        if (key.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
+        if (keyToken.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
         if (model.isBlank()) throw IllegalStateException("请先在设置里选择模型（⚙️ 设置）")
 
         val srcName = if (source == "lo") "老挝语" else "中文"
@@ -150,7 +181,7 @@ object TranslateEngine {
         val req = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/chat/completions")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .header("Authorization", "Bearer $key")
+            .header("Authorization", "Bearer $keyToken")
             .build()
 
         val full = StringBuilder()
@@ -186,7 +217,9 @@ object TranslateEngine {
                 }
             }
         }
-        full.toString().trim()
+        val result = full.toString().trim()
+        cachePut(key, result)
+        result
     }
 
     // ====== prompt 构造 ======
