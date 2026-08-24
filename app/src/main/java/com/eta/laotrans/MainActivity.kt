@@ -315,17 +315,21 @@ class MainActivity : AppCompatActivity() {
         }
         val answered = arrayOf(false)
         // 超时保护：识别服务不响应广播时视为语言未知，不阻塞语音输入
-        val timeout = Handler(Looper.getMainLooper()).postDelayed(Runnable {
-            if (!answered[0]) {
-                answered[0] = true
-                callback(emptySet())
+        val timeoutRunnable = object : Runnable {
+            override fun run() {
+                if (!answered[0]) {
+                    answered[0] = true
+                    callback(emptySet())
+                }
             }
-        }, 2500)
+        }
+        val mainHandler = Handler(Looper.getMainLooper())
+        mainHandler.postDelayed(timeoutRunnable, 2500)
         sendOrderedBroadcast(intent, null, object : BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, i: Intent) {
                 if (answered[0]) return
                 answered[0] = true
-                Handler(Looper.getMainLooper()).removeCallbacks(timeout)
+                mainHandler.removeCallbacks(timeoutRunnable)
                 val langs = i.getStringArrayListExtra(
                     RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES
                 )?.toSet() ?: emptySet()
