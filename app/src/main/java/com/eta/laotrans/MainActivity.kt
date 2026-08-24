@@ -57,6 +57,11 @@ class MainActivity : AppCompatActivity() {
     private var isListening = false
     private var fallbackToSystemTried = false
     private var lastListenLang = "zh-CN"
+    private lateinit var voiceZhBtn: Button
+    private lateinit var voiceLaBtn: Button
+    private var activeVoiceBtn: Button? = null
+    private var pendingVoiceLang = "zh-CN"
+    private var pendingVoiceDir = 1
     private val REQ_SPEECH = 4002
     private val REQ_RECORD_AUDIO = 4003
 
@@ -74,7 +79,10 @@ class MainActivity : AppCompatActivity() {
         dirLabel.setOnClickListener { cycleDirMode() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
-        findViewById<Button>(R.id.voiceBtn).setOnClickListener { startVoiceInput() }
+        voiceZhBtn = findViewById(R.id.voiceZhBtn)
+        voiceLaBtn = findViewById(R.id.voiceLaBtn)
+        voiceZhBtn.setOnClickListener { startVoiceInput("zh-CN", 1) }
+        voiceLaBtn.setOnClickListener { startVoiceInput("lo-LA", 2) }
         setupSpeedControl()
         setupAutoTranslate()
         setupTts()
@@ -216,7 +224,7 @@ class MainActivity : AppCompatActivity() {
             // 识别器真正就绪，此时提示说话才能录上
             runOnUiThread {
                 isListening = true
-                setVoiceBtn("⏹ 聆听中…")
+                activeVoiceBtn?.text = "⏹ 聆听中"
                 statusText.text = "请说话…"
             }
         }
@@ -234,7 +242,7 @@ class MainActivity : AppCompatActivity() {
         override fun onError(error: Int) {
             runOnUiThread {
                 isListening = false
-                setVoiceBtn("🎤")
+                resetVoiceButtons()
                 statusText.text = when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没听清，请再试一次"
@@ -258,7 +266,7 @@ class MainActivity : AppCompatActivity() {
         override fun onResults(results: Bundle?) {
             runOnUiThread {
                 isListening = false
-                setVoiceBtn("🎤")
+                resetVoiceButtons()
                 val text = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -281,21 +289,25 @@ class MainActivity : AppCompatActivity() {
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    private fun setVoiceBtn(label: String) {
-        findViewById<Button>(R.id.voiceBtn).text = label
+    private fun resetVoiceButtons() {
+        voiceZhBtn.text = "🎤中"
+        voiceLaBtn.text = "🎤老"
     }
 
-    private fun startVoiceInput() {
-        // 听写语言与翻译方向相反：译成老挝语就听写中文，反之听老挝语
-        val text = inputText.text.toString().trim()
-        val (_, tgt) = effectiveDirection(text)
-        val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
+    private fun startVoiceInput(listenLang: String, forcedDir: Int) {
         lastListenLang = listenLang
+        // 中文语音 -> 中文转老挝语；老挝语音 -> 老挝语转中文
+        if (dirMode != forcedDir) {
+            dirMode = forcedDir
+            updateDirLabel()
+        }
 
         // 检查录音权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) {
+            pendingVoiceLang = listenLang
+            pendingVoiceDir = forcedDir
             ActivityCompat.requestPermissions(
                 this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_RECORD_AUDIO
             )
@@ -304,10 +316,14 @@ class MainActivity : AppCompatActivity() {
 
         if (isListening) {
             // 再点一下停止聆听
+            activeVoiceBtn?.text = if (activeVoiceBtn == voiceZhBtn) "🎤中" else "🎤老"
+            isListening = false
+            activeVoiceBtn = null
             runCatching { speechRecognizer?.stopListening() }
             return
         }
 
+        activeVoiceBtn = if (listenLang == "zh-CN") voiceZhBtn else voiceLaBtn
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -374,7 +390,9 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_RECORD_AUDIO) {
             if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-                startVoiceInput()
+                val lang = pendingVoiceLang
+                val dir = pendingVoiceDir
+                startVoiceInput(lang, dir)
             } else {
                 statusText.text = "未授予录音权限"
             }
