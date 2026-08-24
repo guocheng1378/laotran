@@ -1,20 +1,13 @@
 package com.eta.laotrans
 
 import android.Manifest
-import android.util.Log
 import android.app.Activity
-import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.provider.Settings
-import android.speech.RecognitionService
 import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
@@ -30,12 +23,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Locale
-import android.media.MediaRecorder
-import android.media.AudioRecord
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import android.util.Base64
 
 class MainActivity : AppCompatActivity() {
 
@@ -58,9 +45,9 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var autoTranslateJob: Job? = null
     private var isAutoInserting = false
-    private var lastTranslated: String = ""
+    private var lastTranslated = ""
 
-    // 语音输入：应用内 SpeechRecognizer（自绘界面，识别器就绪后才提示说话）
+    // 语音输入：直接使用系统 Google 语音输入框（中文/老挝语通用）
     private lateinit var voiceZhBtn: Button
     private lateinit var voiceLaBtn: Button
     private var pendingVoiceLang = "zh-CN"
@@ -70,6 +57,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LocaleUtils.apply(this)
         setContentView(R.layout.activity_main)
 
         inputText = findViewById(R.id.inputText)
@@ -150,9 +138,9 @@ class MainActivity : AppCompatActivity() {
     /** 更新方向胶囊文案 */
     private fun updateDirLabel() {
         dirLabel.text = when (dirMode) {
-            1 -> "中文 → 老挝语"
-            2 -> "老挝语 → 中文"
-            else -> "自动识别：中文 ⇄ 老挝语"
+            1 -> getString(R.string.dir_zh_lo)
+            2 -> getString(R.string.dir_lo_zh)
+            else -> getString(R.string.auto_recognize)
         }
     }
 
@@ -165,7 +153,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun label(code: String) = if (code == "zh") "中文" else "老挝语"
+    private fun label(code: String): String =
+        if (code == "zh") getString(R.string.label_zh) else getString(R.string.label_lo)
 
     private fun openHistory() {
         startActivity(Intent(this, HistoryActivity::class.java))
@@ -203,13 +192,13 @@ class MainActivity : AppCompatActivity() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PROMPT, "请说话…")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.prompt_speak))
             }
             startActivityForResult(intent, REQ_SPEECH)
-            statusText.text = "正在聆听…"
+            statusText.text = getString(R.string.status_listening)
         } catch (e: Exception) {
-            statusText.text = "没有可用的语音识别应用"
-            Toast.makeText(this, "没有可用的语音识别应用", Toast.LENGTH_SHORT).show()
+            statusText.text = getString(R.string.status_no_speech)
+            Toast.makeText(this, getString(R.string.status_no_speech), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -218,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQ_SPEECH) return
         if (resultCode != Activity.RESULT_OK) {
-            statusText.text = "已取消"
+            statusText.text = getString(R.string.status_cancelled)
             return
         }
         val text = data
@@ -226,7 +215,7 @@ class MainActivity : AppCompatActivity() {
             ?.firstOrNull()
             ?.trim()
         if (text.isNullOrEmpty()) {
-            statusText.text = "没听清，请再试一次"
+            statusText.text = getString(R.string.status_unheard)
             return
         }
         isAutoInserting = true
@@ -249,7 +238,7 @@ class MainActivity : AppCompatActivity() {
                 val dir = pendingVoiceDir
                 startVoiceInput(lang, dir)
             } else {
-                statusText.text = "未授予录音权限"
+                statusText.text = getString(R.string.status_perm_denied)
             }
         }
     }
@@ -258,11 +247,11 @@ class MainActivity : AppCompatActivity() {
     private fun doTranslate(manual: Boolean) {
         val text = inputText.text.toString().trim()
         if (text.isEmpty()) {
-            if (manual) Toast.makeText(this, "请输入内容", Toast.LENGTH_SHORT).show()
+            if (manual) Toast.makeText(this, getString(R.string.toast_input_empty), Toast.LENGTH_SHORT).show()
             return
         }
         if (!Config.isConfigured(this)) {
-            statusText.text = "请先在 ⚙️ 设置里填写 API Key 和模型"
+            statusText.text = getString(R.string.hint_need_config)
             if (manual) showSettings()
             return
         }
@@ -270,11 +259,11 @@ class MainActivity : AppCompatActivity() {
         // 自动识别或用户指定方向
         val (src, tgt) = effectiveDirection(text)
         updateDirLabel()
-        statusText.text = "${label(src)} → ${label(tgt)}"
+        statusText.text = getString(R.string.dir_progress, label(src), label(tgt))
 
         if (text == lastTranslated && resultText.text.isNotEmpty() && !manual) return
 
-        statusText.text = "翻译中…"
+        statusText.text = getString(R.string.status_translating)
         autoTranslateJob?.cancel()
         autoTranslateJob = lifecycleScope.launch {
             try {
@@ -298,19 +287,19 @@ class MainActivity : AppCompatActivity() {
                 handler.post { flushPending.set(false); resultText.text = full.toString() }
                 lastTranslated = text
                 resultText.text = result
-                HistoryStore.add(this@MainActivity, text, result, "${label(src)} → ${label(tgt)}")
+                HistoryStore.add(this@MainActivity, text, result, getString(R.string.dir_progress, label(src), label(tgt)))
                 // 翻译成老挝语时自动朗读（在线 MMS）；译成中文不自动读
                 if (tgt == "lo") {
-                    statusText.text = "翻译完成，正在朗读…"
+                    statusText.text = getString(R.string.status_done_speaking)
                     doSpeak()
                 } else {
-                    statusText.text = "翻译完成"
+                    statusText.text = getString(R.string.status_done)
                 }
             } catch (e: Exception) {
                 if (!manual && text != inputText.text.toString().trim()) {
                     return@launch // 用户已继续输入，忽略过期失败
                 }
-                statusText.text = "翻译失败：${e.message}"
+                statusText.text = getString(R.string.status_failed_with, e.message ?: "")
             }
         }
     }
@@ -318,26 +307,26 @@ class MainActivity : AppCompatActivity() {
     private fun doSpeak() {
         val full = resultText.text.toString().trim()
         if (full.isEmpty()) {
-            Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_speak_first), Toast.LENGTH_SHORT).show()
             return
         }
         // 去掉「转写：」「拼音：」行，只读译文本体
         val body = full.substringBefore("转写：").substringBefore("拼音：").trim()
         if (body.isEmpty()) {
-            Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_speak_first), Toast.LENGTH_SHORT).show()
             return
         }
         lifecycleScope.launch {
             if (TranslateEngine.containsLao(body)) {
                 // 老挝语：在线 MMS 合成
-                statusText.text = "正在合成老挝语音…"
+                statusText.text = getString(R.string.status_synth_lao)
                 val ok = LaoSpeech.speak(body, this@MainActivity, speakSpeed)
-                statusText.text = if (ok) "发音成功 🔊" else "发音失败"
+                statusText.text = if (ok) getString(R.string.status_speak_ok) else getString(R.string.status_speak_fail)
             } else {
                 // 中文/其他：系统 TTS
-                statusText.text = "正在合成语音…"
+                statusText.text = getString(R.string.status_synth_voice)
                 val ok = speakWithSystemTts(body)
-                statusText.text = if (ok) "发音成功 🔊" else "本机没有可用的中文语音引擎"
+                statusText.text = if (ok) getString(R.string.status_speak_ok) else getString(R.string.status_no_tts_zh)
             }
         }
     }
