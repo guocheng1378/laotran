@@ -430,8 +430,8 @@ private fun HistoryScreenContent(onBack: () -> Unit) {
                     modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally),
                 )
             } else {
-                LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-                    items(records) { r ->
+                Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+                    records.forEach { r ->
                         Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                             Column(Modifier.padding(12.dp)) {
                                 Text(r.direction, fontSize = 11.sp)
