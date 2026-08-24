@@ -1,6 +1,7 @@
 package com.eta.laotrans
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -109,13 +110,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runVoice() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            statusText.text = "设备不支持语音识别"
-            Toast.makeText(this, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
+        // 先尝试显式绑定 GoogleTTS 识别服务（permission=null，可被第三方绑定），
+        // 不行再回落到系统默认 recognizer。不依赖 isRecognitionAvailable 硬拦截。
+        val candidates = listOf(
+            ComponentName("com.google.android.tts", "com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService"),
+            ComponentName("com.xiaomi.mibrain.speech", "com.xiaomi.mibrain.speech.asr.AsrService")
+        )
+
+        speechRecognizer?.destroy()
+
+        // 默认组件
+        speechRecognizer = if (SpeechRecognizer.isRecognitionAvailable(this)) {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        } else {
+            null
+        }
+        // 若默认组件不可用，尝试候选组件
+        if (speechRecognizer == null) {
+            for (c in candidates) {
+                try {
+                    val sr = SpeechRecognizer.createSpeechRecognizer(this, c)
+                    speechRecognizer = sr
+                    break
+                } catch (e: Exception) {
+                    // 该组件绑定失败，继续尝试下一个
+                }
+            }
+        }
+        if (speechRecognizer == null) {
+            statusText.text = "设备没有可用的语音识别引擎"
+            Toast.makeText(this, "设备没有可用的语音识别引擎", Toast.LENGTH_SHORT).show()
             return
         }
-        speechRecognizer?.destroy()
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
 
         // 老挝语语音识别：lo-LA；若引擎不支持则回落到默认语言
         val locale = if (source == "lo") java.util.Locale("lo", "LA") else java.util.Locale.getDefault()
@@ -160,7 +186,9 @@ class MainActivity : AppCompatActivity() {
                     SpeechRecognizer.ERROR_NO_MATCH -> "没有听清，请再试"
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "未检测到语音"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
+                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "识别引擎不支持老挝语"
                     SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "识别引擎繁忙"
+                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络错误，无法识别"
                     else -> "语音识别出错（$error）"
                 }
                 statusText.text = msg
