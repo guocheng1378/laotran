@@ -68,7 +68,7 @@ class VoiceInputDialog(
         }
         setContentView(R.layout.dialog_voice)
 
-        findViewById<Button>(R.id.voiceCancel).setOnClickListener { dismiss() }
+        findViewById<Button>(R.id.voiceCancel)!!.setOnClickListener { dismiss() }
         startPulse()
         startRecognition()
     }
@@ -160,12 +160,12 @@ class VoiceInputDialog(
         }
     }
 
-    private fun statusText(): TextView = findViewById(R.id.voiceStatus)
+    private fun statusText(): TextView = findViewById<TextView>(R.id.voiceStatus)!!
 
-    private fun partialText(): TextView = findViewById(R.id.voicePartial)
+    private fun partialText(): TextView = findViewById<TextView>(R.id.voicePartial)!!
 
     private fun startPulse() {
-        val ring = findViewById<View>(R.id.micRing)
+        val ring = findViewById<View>(R.id.micRing)!!
         pulseAnim = android.animation.ValueAnimator.ofFloat(1f, 1.35f, 1f).apply {
             duration = 1400
             repeatCount = android.animation.ValueAnimator.INFINITE
