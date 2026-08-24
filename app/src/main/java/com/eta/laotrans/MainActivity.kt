@@ -167,20 +167,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 自绘玻璃弹窗，绑定系统默认识别服务
-        VoiceInputDialog(this, listenLang) { recognized ->
-            isAutoInserting = true
-            inputText.setText(recognized)
-            inputText.setSelection(recognized.length)
-            lastTranslated = ""
-            doTranslate(manual = false)
-            isAutoInserting = false
-        }.show()
-        statusText.text = "正在聆听…"
-
+        // 系统识别 Activity（前台录音，规避 HyperOS 对后台识别服务的静音）
+        launchSystemRecognition(listenLang)
     }
 
-    /** 回退：系统识别 Activity（Google 对话框） */
+    /** 系统识别 Activity（Google / 小爱语音，前台录音不会被静音） */
     private fun launchSystemRecognition(listenLang: String) {
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
