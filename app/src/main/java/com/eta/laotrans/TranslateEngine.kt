@@ -19,6 +19,12 @@ import java.util.concurrent.TimeUnit
  * OpenAI、Qwen、Kimi…）都不需要重新打包。
  *
  * 支持「拉取模型」：调用 /v1/models 列出该接口可用的模型。
+ *
+ * 输出约定：
+ * - 翻译成中文时，只输出中文译文本身。
+ * - 翻译成老挝语时，输出两行：
+ *     第一行：老挝语译文
+ *     第二行：转写：<拉丁字母罗马音>（方便朗读前对照发音，也为中文用户提供读音参考）
  */
 object TranslateEngine {
 
@@ -71,8 +77,17 @@ object TranslateEngine {
             val srcName = if (source == "lo") "老挝语" else "中文"
             val tgtName = if (target == "lo") "老挝语" else "中文"
 
-            val prompt = "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成${tgtName}。" +
-                    "只输出译文本身，不要任何解释、注释或引号。文本如下：\n$text"
+            // 翻译成老挝语时，额外要求给出拉丁字母罗马音转写，便于发音与对照。
+            val prompt = if (target == "lo") {
+                "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成老挝语。\n" +
+                        "严格按照以下两行输出：\n" +
+                        "第1行：只输出老挝语译文本身，不要任何解释、注释或引号。\n" +
+                        "第2行：以「转写：」开头，输出第1行老挝语译文的拉丁字母罗马音（Latin romanization），用于发音参考。\n" +
+                        "不要输出其它任何内容。文本如下：\n$text"
+            } else {
+                "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成${tgtName}。" +
+                        "只输出译文本身，不要任何解释、注释或引号。文本如下：\n$text"
+            }
 
             val body = JSONObject()
                 .put("model", model)
