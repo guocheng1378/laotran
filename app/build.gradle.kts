@@ -19,7 +19,7 @@ val apiKey: String = (localProps.getProperty("API_KEY")
 
 android {
     namespace = "com.eta.laotrans"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.eta.laotrans"
