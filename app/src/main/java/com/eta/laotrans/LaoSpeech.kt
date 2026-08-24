@@ -2,6 +2,7 @@ package com.eta.laotrans
 
 import android.content.Context
 import android.media.MediaPlayer
+import android.media.PlaybackParams
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,7 @@ object LaoSpeech {
     /**
      * 合成老挝语音并播放。返回 true 表示已触发播放。
      */
-    suspend fun speak(text: String, context: Context): Boolean = withContext(Dispatchers.IO) {
+    suspend fun speak(text: String, context: Context, speed: Float = 1.0f): Boolean = withContext(Dispatchers.IO) {
         try {
             val session = "lao${System.currentTimeMillis()}"
 
@@ -114,6 +115,13 @@ object LaoSpeech {
                     setDataSource(wavFile.absolutePath)
                     setOnCompletionListener { it.release() }
                     prepare()
+                    if (speed > 0f && speed != 1.0f) {
+                        try {
+                            setPlaybackParams(PlaybackParams().setSpeed(speed))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
                     start()
                 }
             }
