@@ -1,6 +1,7 @@
 package com.eta.laotrans
 
 import android.media.AudioRecord
+import android.util.Log
 import android.media.MediaRecorder
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
