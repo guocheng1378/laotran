@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
 /**
@@ -36,7 +37,7 @@ object LaoSpeech {
 
             // 1) 提交合成任务到队列
             val joinJson = JSONObject()
-                .put("data", arrayOf(text))
+                .put("data", JSONArray(arrayOf(text)))
                 .put("event_data", JSONObject.NULL)
                 .put("fn_index", 2)
                 .put("trigger_id", 2)
