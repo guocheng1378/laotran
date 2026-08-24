@@ -5,6 +5,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
@@ -21,6 +23,9 @@ class MainActivity : AppCompatActivity() {
     private var target: String = "lo"
     private var lastResult: String = ""
 
+    // 语音语速（默认 1.0）
+    private var speakSpeed: Float = 1.0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -34,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.swapBtn).setOnClickListener { swapDirection() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
+        setupSpeedControl()
     }
 
     private fun swapDirection() {
@@ -96,15 +102,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun doSpeak() {
-        val text = resultText.text.toString().trim()
+        val full = resultText.text.toString().trim()
+        if (full.isEmpty()) {
+            Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 若翻译结果含「转写：」行，朗读时只取老挝语原文部分
+        val text = if (full.contains("转写：")) full.substringBefore("转写：").trim() else full
         if (text.isEmpty()) {
             Toast.makeText(this, "先翻译，再朗读", Toast.LENGTH_SHORT).show()
             return
         }
         statusText.text = "正在合成老挝语音…"
         lifecycleScope.launch {
-            val ok = LaoSpeech.speak(text, this@MainActivity)
+            val ok = LaoSpeech.speak(text, this@MainActivity, speakSpeed)
             statusText.text = if (ok) "发音成功 🔊" else "发音失败"
+        }
+    }
+
+    private fun setupSpeedControl() {
+        val prefs = getSharedPreferences("laotrans_prefs", MODE_PRIVATE)
+        val saved = prefs.getFloat("speak_speed", 1.0f)
+        speakSpeed = saved
+        val group = findViewById<RadioGroup>(R.id.speedGroup)
+        val map = mapOf(
+            R.id.speed075 to 0.75f,
+            R.id.speed100 to 1.0f,
+            R.id.speed125 to 1.25f,
+            R.id.speed150 to 1.5f,
+            R.id.speed200 to 2.0f
+        )
+        for ((id, v) in map) {
+            if (v == saved) { group.check(id); break }
+        }
+        group.setOnCheckedChangeListener { _, checkedId ->
+            val v = map[checkedId] ?: 1.0f
+            speakSpeed = v
+            prefs.edit().putFloat("speak_speed", v).apply()
         }
     }
 }
