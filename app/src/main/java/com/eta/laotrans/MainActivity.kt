@@ -1,8 +1,11 @@
 package com.eta.laotrans
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
@@ -40,6 +43,9 @@ class MainActivity : AppCompatActivity() {
     private var autoTranslateJob: Job? = null
     private var isAutoInserting = false
     private var lastTranslated: String = ""
+
+    // 语音输入（系统识别 Activity）
+    private val REQ_SPEECH = 4002
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,40 +125,54 @@ class MainActivity : AppCompatActivity() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
-    // ====== 语音输入：系统 SpeechRecognizer（Collins 同款） ======
+    // ====== 语音输入：系统识别 Activity（自带录音与 UI） ======
     private fun startVoiceInput() {
         // 听写语言与翻译方向相反：译成老挝语就听写中文，反之听老挝语
         val text = inputText.text.toString().trim()
         val (_, tgt) = effectiveDirection(text)
         val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
 
-        if (!SpeechInput.isAvailable(this)) {
-            statusText.text = "本机没有可用的语音识别服务"
-            return
-        }
-        statusText.text = "正在聆听…"
-        SpeechInput.start(
-            this,
-            listenLang,
-            onStatus = { s -> statusText.text = s },
-            onResult = { recognized ->
-                isAutoInserting = true
-                inputText.setText(recognized)
-                inputText.setSelection(recognized.length)
-                lastTranslated = ""
-                doTranslate(manual = false)
-                isAutoInserting = false
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "请说话…")
             }
-        )
+            startActivityForResult(intent, REQ_SPEECH)
+            statusText.text = "正在聆听…"
+        } catch (e: Exception) {
+            statusText.text = "没有可用的语音识别应用"
+            Toast.makeText(this, "没有可用的语音识别应用", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        SpeechInput.onRequestPermissionsResult(requestCode, grantResults, this)
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_SPEECH) return
+        if (resultCode != Activity.RESULT_OK) {
+            statusText.text = "已取消"
+            return
+        }
+        val text = data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (text.isNullOrEmpty()) {
+            statusText.text = "没听清，请再试一次"
+            return
+        }
+        isAutoInserting = true
+        inputText.setText(text)
+        inputText.setSelection(text.length)
+        lastTranslated = ""
+        doTranslate(manual = false)
+        isAutoInserting = false
     }
 
     // ====== 翻译 ======
@@ -267,7 +287,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         autoTranslateJob?.cancel()
-        SpeechInput.release()
         systemTts?.stop()
         systemTts?.shutdown()
         super.onDestroy()
