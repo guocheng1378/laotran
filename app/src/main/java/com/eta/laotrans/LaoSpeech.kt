@@ -55,19 +55,48 @@ object LaoSpeech {
             val eventId = Regex("\"event_id\":\"([^\"]+)\"").find(joinBody)?.groupValues?.get(1)
                 ?: return@withContext false
 
-            // 2) 轮询等待合成完成
+            // 2) 轮询等待合成完成（SSE：text/event-stream，逐行读取），从 process_completed 里取 wav url
             val pollUrl = "$BASE/gradio_api/queue/data?session_hash=$session&event_id=$eventId"
             val pollReq = Request.Builder().url(pollUrl)
                 .header("User-Agent", "Mozilla/5.0").build()
             val pollResp = client.newCall(pollReq).execute()
-            val pollBody = pollResp.body?.string() ?: return@withContext false
+            val body = pollResp.body ?: return@withContext false
+            val source = body.source()
+
+            var wavUrl: String? = null
+            val sb = StringBuilder()
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                sb.append(line).append("\n")
+                if (line.contains("process_completed")) {
+                    // 该行形如: data: {"msg":"process_completed",...,"output":{"data":[{...,"url":"https:\/\/...\/output.wav",...}]}}
+                    val jsonStr = line.substringAfter("data:").trim()
+                    wavUrl = jsonStr.let {
+                        runCatching {
+                            val obj = JSONObject(it)
+                            obj.getJSONObject("output")
+                                .getJSONArray("data")
+                                .getJSONObject(0)
+                                .getString("url")
+                        }.getOrNull()
+                    }
+                    break
+                }
+            }
             pollResp.close()
 
-            val wavUrl = Regex("\"url\":\"(https[^\"]+\\.wav[^\"]*)\"").find(pollBody)?.groupValues?.get(1)
-                ?: return@withContext false
+            // 兜底：若上面没解析到，再用宽松正则（允许反斜杠）从全文取 url
+            if (wavUrl.isNullOrBlank()) {
+                wavUrl = Regex("\"url\":\"([^\"]+)\"").find(sb.toString())?.groupValues?.get(1)
+            }
+            wavUrl = wavUrl?.trim()?.takeIf { it.isNotBlank() } ?: return@withContext false
+
+            // JSONObject 解析后 url 已无 \/ 转义；正则兜底时可能带回转义，统一还原
+            wavUrl = wavUrl.replace("\\/", "/")
+            if (!wavUrl.startsWith("http")) return@withContext false
 
             // 3) 下载 wav
-            val dlReq = Request.Builder().url(wavUrl.replace("\\/", "/"))
+            val dlReq = Request.Builder().url(wavUrl)
                 .header("User-Agent", "Mozilla/5.0").build()
             val dlResp = client.newCall(dlReq).execute()
             val bytes = dlResp.body?.bytes() ?: return@withContext false
