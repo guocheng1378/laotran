@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="⚙️ 大模型设置"
+            android:text="@string/settings_title"
             android:textSize="19sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary" />
@@ -22,7 +22,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="接口地址 (Base URL)"
+            android:text="@string/settings_base_url"
             android:textSize="13sp"
             android:textColor="@color/text_secondary"
             android:layout_marginTop="16dp" />
@@ -43,7 +43,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="API Key"
+            android:text="@string/settings_api_key"
             android:textSize="13sp"
             android:textColor="@color/text_secondary"
             android:layout_marginTop="12dp" />
@@ -64,7 +64,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="模型 (Model)"
+            android:text="@string/settings_model"
             android:textSize="13sp"
             android:textColor="@color/text_secondary"
             android:layout_marginTop="12dp" />
@@ -99,7 +99,7 @@
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
                 android:background="@drawable/bg_glass_secondary"
-                android:text="拉取模型"
+                android:text="@string/settings_fetch"
                 android:textSize="13sp"
                 android:textColor="@color/text_primary"
                 android:layout_marginStart="8dp" />
@@ -113,35 +113,49 @@
             android:textColor="@color/text_hint"
             android:layout_marginTop="6dp" />
 
+        <!-- 界面语言：中文 / 老挝文 -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🎙️ 老挝语语音识别 (Google Cloud STT)"
+            android:text="@string/lang_label"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
             android:layout_marginTop="18dp" />
 
-        <EditText
-            android:id="@+id/googleSttKeyEdit"
+        <RadioGroup
+            android:id="@+id/langGroup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="填写 Google Cloud STT API Key 以识别老挝语语音"
-            android:textColorHint="@color/text_hint"
-            android:textColor="@color/text_primary"
-            android:inputType="textPassword"
-            android:textSize="13sp"
-            android:background="@drawable/bg_glass_input"
-            android:padding="12dp"
-            android:layout_marginTop="4dp" />
+            android:orientation="horizontal"
+            android:background="@drawable/bg_glass_pill"
+            android:padding="4dp"
+            android:layout_marginTop="4dp">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="免费额度 60 分钟/月，开通：console.cloud.google.com"
-            android:textSize="11sp"
-            android:textColor="@color/text_hint"
-            android:layout_marginTop="2dp" />
+            <RadioButton
+                android:id="@+id/langZh"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
+                android:text="@string/label_zh"
+                android:textSize="14sp"
+                android:textColor="@color/text_seg_selector" />
+
+            <RadioButton
+                android:id="@+id/langLo"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:button="@null"
+                android:background="@drawable/bg_radio_seg"
+                android:gravity="center"
+                android:text="@string/label_lo"
+                android:textSize="14sp"
+                android:textColor="@color/text_seg_selector" />
+        </RadioGroup>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -159,7 +173,7 @@
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 android:background="@drawable/bg_glass_secondary"
-                android:text="取消"
+                android:text="@string/settings_cancel"
                 android:textSize="15sp"
                 android:textColor="@color/text_primary"
                 android:layout_marginEnd="8dp" />
@@ -174,7 +188,7 @@
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
                 android:background="@drawable/bg_glass_primary"
-                android:text="保存"
+                android:text="@string/settings_save"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF" />
