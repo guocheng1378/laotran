@@ -31,6 +31,7 @@ class HistoryActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LocaleUtils.apply(this)
         setContentView(R.layout.activity_history)
 
         systemTts = TextToSpeech(this) { status ->
@@ -41,7 +42,7 @@ class HistoryActivity : AppCompatActivity() {
         findViewById<Button>(R.id.historyBackBtn).setOnClickListener { finish() }
         findViewById<Button>(R.id.historyClearBtn).setOnClickListener {
             HistoryStore.clear(this)
-            Toast.makeText(this, "已清空记录", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.history_cleared), Toast.LENGTH_SHORT).show()
             reload()
         }
 
@@ -57,12 +58,12 @@ class HistoryActivity : AppCompatActivity() {
     private fun play(dst: String) {
         val body = dst.substringBefore("转写：").substringBefore("拼音：").trim()
         if (body.isEmpty()) {
-            Toast.makeText(this, "无可朗读内容", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.history_nothing), Toast.LENGTH_SHORT).show()
             return
         }
         lifecycleScope.launch {
             if (TranslateEngine.containsLao(body)) {
-                Toast.makeText(this@HistoryActivity, "正在合成老挝语音…", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@HistoryActivity, getString(R.string.status_synth_lao), Toast.LENGTH_SHORT).show()
                 LaoSpeech.speak(body, this@HistoryActivity, 1.0f)
             } else {
                 speakZh(body)
@@ -73,7 +74,7 @@ class HistoryActivity : AppCompatActivity() {
     private suspend fun speakZh(text: String) = withContext(Dispatchers.Main) {
         val tts = systemTts
         if (!ttsReady || tts == null) {
-            Toast.makeText(this@HistoryActivity, "本机没有可用的中文语音引擎", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@HistoryActivity, getString(R.string.status_no_tts_zh), Toast.LENGTH_SHORT).show()
             return@withContext
         }
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "hist_${System.currentTimeMillis()}")
