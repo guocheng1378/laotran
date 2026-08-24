@@ -2,6 +2,7 @@ package com.eta.laotrans
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -275,6 +276,13 @@ class MainActivity : AppCompatActivity() {
                     statusText.text = "没听清，请再试一次"
                     return@runOnUiThread
                 }
+                // 老挝语识别模式下检查结果是否真的含老挝文字
+                if (lastListenLang == "lo-LA" && !containsLaoScript(text)) {
+                    statusText.text = "识别结果不是老挝语（系统语音服务不支持老挝语识别），请改用文字输入"
+                    // 仍填入，让用户看到实际结果
+                } else if (lastListenLang == "zh-CN" && containsLaoScript(text)) {
+                    statusText.text = "检测到老挝语，请改用 🎤老 按钮识别"
+                }
                 isAutoInserting = true
                 inputText.setText(text)
                 inputText.setSelection(text.length)
@@ -287,6 +295,49 @@ class MainActivity : AppCompatActivity() {
         override fun onPartialResults(partialResults: Bundle?) {}
 
         override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    private var recognizerSupportedLanguages: Set<String>? = null
+
+    /** 查询识别服务支持的语言列表（通过标准 ACTION_GET_LANGUAGE_DETAILS 广播） */
+    private fun checkRecognizerLanguages(callback: (Set<String>) -> Unit) {
+        if (recognizerSupportedLanguages != null) {
+            callback(recognizerSupportedLanguages!!)
+            return
+        }
+        val cn = findRecognitionComponent()
+        if (cn == null) {
+            callback(emptySet())
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_GET_LANGUAGE_DETAILS).apply {
+            setPackage(cn.packageName)
+        }
+        val answered = arrayOf(false)
+        // 超时保护：识别服务不响应广播时视为语言未知，不阻塞语音输入
+        val timeout = Handler(Looper.getMainLooper()).postDelayed({
+            if (!answered[0]) {
+                answered[0] = true
+                callback(emptySet())
+            }
+        }, 2500)
+        sendOrderedBroadcast(intent, null, object : BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, i: Intent) {
+                if (answered[0]) return
+                answered[0] = true
+                timeout?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                val langs = i.getStringArrayListExtra(
+                    RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES
+                )?.toSet() ?: emptySet()
+                recognizerSupportedLanguages = langs
+                callback(langs)
+            }
+        }, null, Activity.RESULT_OK, null, null)
+    }
+
+    /** 判断文本是否包含老挝文（Unicode U+0E80–U+0EFF） */
+    private fun containsLaoScript(text: String): Boolean {
+        return text.any { it.code in 0x0E80..0x0EFF }
     }
 
     private fun resetVoiceButtons() {
@@ -323,6 +374,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 异步查询识别服务语言支持
+        checkRecognizerLanguages { supported ->
+            runOnUiThread {
+                if (supported.isNotEmpty() && listenLang !in supported) {
+                    val langName = if (listenLang == "lo-LA") "老挝语" else "中文"
+                    statusText.text = "系统语音服务不支持 ${langName} 识别，请用文字输入"
+                    Toast.makeText(this@MainActivity,
+                        "系统语音服务不支持 ${langName} 识别，请用文字输入",
+                        Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                doStartListening(listenLang)
+            }
+        }
+    }
+
+    private fun doStartListening(listenLang: String) {
         activeVoiceBtn = if (listenLang == "zh-CN") voiceZhBtn else voiceLaBtn
         try {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
