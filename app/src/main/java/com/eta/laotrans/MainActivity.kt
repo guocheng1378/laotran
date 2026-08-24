@@ -30,6 +30,12 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.util.Locale
+import android.media.MediaRecorder
+import android.media.AudioRecord
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import android.util.Base64
 
 class MainActivity : AppCompatActivity() {
 
@@ -351,6 +357,59 @@ class MainActivity : AppCompatActivity() {
         voiceLaBtn.text = "🎤老"
     }
 
+    private fun handleRecognizedText(text: String) {
+        // 老挝语识别模式下检查结果是否真的含老挝文字
+        if (lastListenLang == "lo-LA" && !containsLaoScript(text)) {
+            Log.d("LaoTran", "lo-LA 识别结果非老挝文: $text")
+            statusText.text = "识别结果不是老挝语，请重试"
+        } else if (lastListenLang == "zh-CN" && containsLaoScript(text)) {
+            statusText.text = "检测到老挝语，请改用 🎤老 按钮识别"
+        }
+        isAutoInserting = true
+        inputText.setText(text)
+        inputText.setSelection(text.length)
+        isAutoInserting = false
+        lastTranslated = ""
+        doTranslate(manual = false)
+    }
+
+    /** Google Cloud STT 录音识别（老挝语，lo-LA） */
+    private var googleSttListening = false
+
+    private fun startGoogleSttListening() {
+        googleSttListening = true
+        isListening = true
+        activeVoiceBtn = voiceLaBtn
+        activeVoiceBtn?.text = "⏹ 聆听中"
+        statusText.text = "🎤 说老挝语…"
+        GoogleStt.startRecording()
+    }
+
+    private fun stopGoogleSttListening() {
+        googleSttListening = false
+        isListening = false
+        activeVoiceBtn?.text = "🎤老"
+        activeVoiceBtn = null
+        statusText.text = "识别中…"
+        val pcm = GoogleStt.stopRecording()
+        if (pcm.isEmpty()) {
+            statusText.text = "没录到声音，请重试"
+            return
+        }
+        val key = Config.googleSttKey(this)
+        lifecycleScope.launch {
+            val result = GoogleStt.recognize(pcm, key)
+            runOnUiThread {
+                if (result.isNullOrBlank()) {
+                    statusText.text = "Google 云端识别失败，请重试"
+                    return@runOnUiThread
+                }
+                handleRecognizedText(result)
+                statusText.text = "✅ 识别成功"
+            }
+        }
+    }
+
     private fun startVoiceInput(listenLang: String, forcedDir: Int) {
         lastListenLang = listenLang
         // 中文语音 -> 中文转老挝语；老挝语音 -> 老挝语转中文
@@ -371,8 +430,18 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 老挝语 + 配置了 Google STT Key → 走 Google Cloud STT 识别
+        if (listenLang == "lo-LA" && Config.googleSttKey(this).isNotBlank()) {
+            startGoogleSttListening()
+            return
+        }
+
         if (isListening) {
             // 再点一下停止聆听
+            if (listenLang == "lo-LA" && Config.googleSttKey(this).isNotBlank() && activeVoiceBtn == voiceLaBtn) {
+                stopGoogleSttListening()
+                return
+            }
             activeVoiceBtn?.text = if (activeVoiceBtn == voiceZhBtn) "🎤中" else "🎤老"
             isListening = false
             activeVoiceBtn = null
@@ -583,6 +652,10 @@ class MainActivity : AppCompatActivity() {
         autoTranslateJob?.cancel()
         speechRecognizer?.destroy()
         speechRecognizer = null
+        if (googleSttListening) {
+            googleSttListening = false
+            GoogleStt.stopRecording()
+        }
         systemTts?.stop()
         systemTts?.shutdown()
         super.onDestroy()

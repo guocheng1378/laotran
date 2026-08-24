@@ -14,6 +14,7 @@ object Config {
     private const val KEY_BASE_URL = "base_url"
     private const val KEY_API_KEY = "api_key"
     private const val KEY_MODEL = "model"
+    private const val KEY_GOOGLE_STT = "google_stt_key"
 
     // 默认值：b.ai
     fun defaultBaseUrl() = "https://api.b.ai/v1"
@@ -28,11 +29,14 @@ object Config {
 
     fun model(c: Context): String = sp(c).getString(KEY_MODEL, "") ?: ""
 
-    fun save(c: Context, baseUrl: String, apiKey: String, model: String) {
+    fun googleSttKey(c: Context): String = sp(c).getString(KEY_GOOGLE_STT, "") ?: ""
+
+    fun save(c: Context, baseUrl: String, apiKey: String, model: String, googleStt: String = "") {
         sp(c).edit()
             .putString(KEY_BASE_URL, baseUrl.trim())
             .putString(KEY_API_KEY, apiKey.trim())
             .putString(KEY_MODEL, model.trim())
+            .putString(KEY_GOOGLE_STT, googleStt.trim())
             .apply()
     }
 

@@ -32,11 +32,13 @@ object SettingsDialog {
         val modelEdit = view.findViewById<EditText>(R.id.modelEdit)
         val fetchBtn = view.findViewById<Button>(R.id.fetchModelsBtn)
         val fetchStatus = view.findViewById<TextView>(R.id.fetchStatusText)
+        val googleSttKeyEdit = view.findViewById<EditText>(R.id.googleSttKeyEdit)
 
         // 回填已保存的配置
         baseUrlEdit.setText(Config.baseUrl(context))
         apiKeyEdit.setText(Config.apiKey(context))
         modelEdit.setText(Config.model(context))
+        googleSttKeyEdit.setText(Config.googleSttKey(context))
         fetchStatus.text = lastStatus
 
         val dialog = AppCompatDialog(context)
@@ -61,7 +63,8 @@ object SettingsDialog {
                 context,
                 baseUrlEdit.text.toString(),
                 apiKeyEdit.text.toString(),
-                modelEdit.text.toString()
+                modelEdit.text.toString(),
+                googleSttKeyEdit.text.toString()
             )
             lastStatus = "已保存"
             dialog.dismiss()
