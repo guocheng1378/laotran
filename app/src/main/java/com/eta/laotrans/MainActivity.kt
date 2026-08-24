@@ -315,7 +315,7 @@ class MainActivity : AppCompatActivity() {
         }
         val answered = arrayOf(false)
         // 超时保护：识别服务不响应广播时视为语言未知，不阻塞语音输入
-        val timeout = Handler(Looper.getMainLooper()).postDelayed({
+        val timeout = Handler(Looper.getMainLooper()).postDelayed(Runnable {
             if (!answered[0]) {
                 answered[0] = true
                 callback(emptySet())
