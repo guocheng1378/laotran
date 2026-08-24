@@ -206,8 +206,8 @@ class MainActivity : AppCompatActivity() {
         }.getOrNull().orEmpty()
         if (services.isEmpty()) return null
         val preferred = listOf(
-            "com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService",
-            "com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService"
+            "com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService",
+            "com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService"
         )
         for (flat in preferred) {
             val cn = ComponentName.unflattenFromString(flat) ?: continue
@@ -382,12 +382,7 @@ class MainActivity : AppCompatActivity() {
         checkRecognizerLanguages { supported ->
             runOnUiThread {
                 if (supported.isNotEmpty() && listenLang !in supported) {
-                    val langName = if (listenLang == "lo-LA") "老挝语" else "中文"
-                    statusText.text = "系统语音服务不支持 ${langName} 识别，请用文字输入"
-                    Toast.makeText(this@MainActivity,
-                        "系统语音服务不支持 ${langName} 识别，请用文字输入",
-                        Toast.LENGTH_LONG).show()
-                    return@runOnUiThread
+                    Log.d("LaoTran", "语音服务不支持 $listenLang, supported=$supported, 仍尝试识别")
                 }
                 doStartListening(listenLang)
             }
