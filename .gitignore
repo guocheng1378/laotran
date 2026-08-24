@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+
+# Local config (key 等)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# 上传产物
+*.apk
