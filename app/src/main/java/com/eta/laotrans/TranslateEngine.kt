@@ -15,22 +15,22 @@ import java.util.concurrent.TimeUnit
  * 翻译引擎（大模型 LLM，OpenAI 兼容接口）
  *
  * 所有配置（接口地址 / API Key / 模型名）在 App 内的设置界面里填，
- * 通过 [Config] 持久化，因此切换任意 OpenAI 兼容服务（b.ai、DeepSeek、
- * OpenAI、Qwen、Kimi…）都不需要重新打包。
+ * 通过 [Config] 持久化。
  *
- * 支持「拉取模型」：调用 /v1/models 列出该接口可用的模型。
- *
- * 输出约定：
- * - 翻译成中文时，只输出中文译文本身。
- * - 翻译成老挝语时，输出两行：
- *     第一行：老挝语译文
- *     第二行：转写：<拉丁字母罗马音>（方便朗读前对照发音，也为中文用户提供读音参考）
+ * 翻译成老挝语时输出两行：老挝语译文 + 「转写：<罗马音>」。
+ * 支持 [translateStream] 流式翻译：边生成边通过 onDelta 回调显示。
  */
 object TranslateEngine {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS) // 大模型响应可能慢
+        .build()
+
+    /** 无读超时限制的客户端，专用于流式请求（流式间隔可能超过 60s） */
+    private val streamClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS) // 流式不设读超时
         .build()
 
     /**
@@ -64,7 +64,7 @@ object TranslateEngine {
 
     /**
      * 翻译文本。source/target 建议："zh"（中文）"lo"（老挝语）。
-     * 返回翻译后的字符串。
+     * 返回翻译后的字符串。翻译成老挝语时为「老挝语译文\n转写：罗马音」两行格式。
      */
     suspend fun translate(context: Context, text: String, source: String, target: String): String =
         withContext(Dispatchers.IO) {
@@ -77,22 +77,12 @@ object TranslateEngine {
             val srcName = if (source == "lo") "老挝语" else "中文"
             val tgtName = if (target == "lo") "老挝语" else "中文"
 
-            // 翻译成老挝语时，额外要求给出拉丁字母罗马音转写，便于发音与对照。
-            val prompt = if (target == "lo") {
-                "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成老挝语。\n" +
-                        "严格按照以下两行输出：\n" +
-                        "第1行：只输出老挝语译文本身，不要任何解释、注释或引号。\n" +
-                        "第2行：以「转写：」开头，输出第1行老挝语译文的拉丁字母罗马音（Latin romanization），用于发音参考。\n" +
-                        "不要输出其它任何内容。文本如下：\n$text"
-            } else {
-                "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成${tgtName}。" +
-                        "只输出译文本身，不要任何解释、注释或引号。文本如下：\n$text"
-            }
+            val prompt = buildPrompt(text, srcName, tgtName, target == "lo")
 
             val body = JSONObject()
                 .put("model", model)
                 .put("messages", JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", "你是一名精准的老挝语-中文互译专家，译文要自然、准确、符合当地人表达。"))
+                    .put(JSONObject().put("role", "system").put("content", systemPrompt()))
                     .put(JSONObject().put("role", "user").put("content", prompt)))
                 .put("temperature", 0.2)
 
@@ -114,4 +104,89 @@ object TranslateEngine {
                     .trim()
             }
         }
+
+    /**
+     * 流式翻译：SSE 边生成边回调。onDelta 在后台线程被调用，收到每个增量片段；
+     * 返回完整拼接结果。失败抛异常。
+     *
+     * @param onDelta 每次收到增量时回调（参数为新增的文本片段）
+     */
+    suspend fun translateStream(
+        context: Context,
+        text: String,
+        source: String,
+        target: String,
+        onDelta: (String) -> Unit
+    ): String = withContext(Dispatchers.IO) {
+        val baseUrl = Config.baseUrl(context)
+        val key = Config.apiKey(context)
+        val model = Config.model(context)
+        if (key.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
+        if (model.isBlank()) throw IllegalStateException("请先在设置里选择模型（⚙️ 设置）")
+
+        val srcName = if (source == "lo") "老挝语" else "中文"
+        val tgtName = if (target == "lo") "老挝语" else "中文"
+        val prompt = buildPrompt(text, srcName, tgtName, target == "lo")
+
+        val body = JSONObject()
+            .put("model", model)
+            .put("stream", true)
+            .put("messages", JSONArray()
+                .put(JSONObject().put("role", "system").put("content", systemPrompt()))
+                .put(JSONObject().put("role", "user").put("content", prompt)))
+            .put("temperature", 0.2)
+
+        val req = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/chat/completions")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .header("Authorization", "Bearer $key")
+            .build()
+
+        val full = StringBuilder()
+        streamClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                val err = resp.body?.string() ?: ""
+                throw IllegalStateException("翻译请求失败 HTTP ${resp.code}: $err")
+            }
+            val source2 = resp.body?.source() ?: throw IllegalStateException("空响应")
+            while (true) {
+                val line = source2.readUtf8Line() ?: break
+                if (!line.startsWith("data:")) continue
+                val payload = line.removePrefix("data:").trim()
+                if (payload == "[DONE]") break
+                try {
+                    val delta = JSONObject(payload)
+                        .getJSONArray("choices")
+                        .optJSONObject(0)
+                        ?.optJSONObject("delta")
+                        ?.optString("content") ?: ""
+                    if (delta.isNotEmpty()) {
+                        full.append(delta)
+                        onDelta(delta)
+                    }
+                } catch (_: Exception) {
+                    // 忽略无法解析的心跳/注释行
+                }
+            }
+        }
+        full.toString().trim()
+    }
+
+    // ====== prompt 构造 ======
+
+    private fun systemPrompt(): String =
+        "你是一名精准的老挝语-中文互译专家，译文要自然、准确、符合当地人表达。"
+
+    private fun buildPrompt(text: String, srcName: String, tgtName: String, toLao: Boolean): String {
+        return if (toLao) {
+            "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成${tgtName}。" +
+                    "请严格遵守以下输出格式，输出两行：\n" +
+                    "第一行：只写老挝语译文，纯老挝文字，不要有任何符号、拼音或说明；\n" +
+                    "第二行：以「转写：」开头，给出老挝语译文的拉丁转写（用罗马字母标注发音，帮助不懂老挝文字的人朗读）。\n" +
+                    "不要输出其他任何内容。文本如下：\n$text"
+        } else {
+            "你是一名专业的老挝语-中文翻译。请把下面的文本从${srcName}翻译成${tgtName}。" +
+                    "只输出译文本身，不要任何解释、注释或引号。文本如下：\n$text"
+        }
+    }
 }
