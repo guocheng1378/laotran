@@ -25,7 +25,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="老挝语翻译"
+                android:text="@string/app_name"
                 android:textSize="28sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
@@ -34,7 +34,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Lao · 中文 · 语音互译"
+                android:text="@string/app_subtitle"
                 android:textSize="12sp"
                 android:textColor="@color/text_hint"
                 android:layout_marginTop="2dp" />
@@ -77,7 +77,7 @@
         android:paddingEnd="14dp"
         android:paddingTop="7dp"
         android:paddingBottom="7dp"
-        android:text="自动识别：中文 ⇄ 老挝语"
+        android:text="@string/auto_recognize"
         android:textSize="13sp"
         android:textColor="@color/accent_purple"
         android:clickable="true"
@@ -95,7 +95,7 @@
         android:gravity="top|start"
         android:background="@drawable/bg_glass_input"
         android:padding="16dp"
-        android:hint="输入要翻译的文字…"
+        android:hint="@string/hint_input"
         android:textColorHint="@color/text_hint"
         android:textColor="@color/text_primary"
         android:textSize="16sp"
@@ -122,7 +122,7 @@
             android:background="@drawable/bg_mic_circle"
             android:text="🎤中"
             android:textSize="16sp"
-            android:contentDescription="中文语音输入"
+            android:contentDescription="@string/cd_voice_zh"
             android:layout_marginEnd="10dp" />
 
         <Button
@@ -137,7 +137,7 @@
             android:background="@drawable/bg_mic_circle"
             android:text="🎤老"
             android:textSize="16sp"
-            android:contentDescription="老挝语语音输入"
+            android:contentDescription="@string/cd_voice_la"
             android:layout_marginEnd="10dp" />
 
         <Button
@@ -150,7 +150,7 @@
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:background="@drawable/bg_glass_primary"
-            android:text="翻 译"
+            android:text="@string/btn_translate"
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
@@ -167,7 +167,7 @@
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:background="@drawable/bg_glass_secondary"
-            android:text="⇄ 互换"
+            android:text="@string/btn_swap"
             android:textSize="15sp"
             android:textColor="@color/text_primary" />
     </LinearLayout>
@@ -199,7 +199,7 @@
         android:paddingStart="22dp"
         android:paddingEnd="22dp"
         android:background="@drawable/bg_glass_secondary"
-        android:text="🔊 朗读"
+        android:text="@string/btn_speak"
         android:textSize="15sp"
         android:textColor="@color/text_primary"
         android:layout_marginTop="12dp" />
@@ -214,7 +214,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="朗读语速"
+            android:text="@string/speed_label"
             android:textSize="12sp"
             android:textColor="@color/text_hint" />
 
