@@ -325,7 +325,7 @@ class MainActivity : AppCompatActivity() {
             override fun onReceive(context: android.content.Context, i: Intent) {
                 if (answered[0]) return
                 answered[0] = true
-                timeout?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
+                Handler(Looper.getMainLooper()).removeCallbacks(timeout)
                 val langs = i.getStringArrayListExtra(
                     RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES
                 )?.toSet() ?: emptySet()
