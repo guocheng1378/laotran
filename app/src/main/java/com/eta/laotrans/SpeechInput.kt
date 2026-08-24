@@ -145,7 +145,7 @@ object SpeechInput {
             }
             override fun onError(error: Int) {
                 Log.e(TAG, "onError code=$error（组件 $comp）")
-                if (error == SpeechRecognizer.ERROR_CANNOT_CONNECT_TO_SERVICE
+                if (error == 12
                     && candidateIndex < candidateComponents.size
                 ) {
                     // 绑定失败，切换下一个候选
@@ -156,11 +156,11 @@ object SpeechInput {
                 }
                 release()
                 val msg = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "没听清，请再试一次"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有检测到说话"
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
-                    SpeechRecognizer.ERROR_CLIENT -> "语音识别服务未就绪"
-                    SpeechRecognizer.ERROR_CANNOT_CONNECT_TO_SERVICE -> "语音识别服务不可用"
+                    7 -> "没听清，请再试一次"
+                    6 -> "没有检测到说话"
+                    9 -> "缺少录音权限"
+                    5 -> "语音识别服务未就绪"
+                    12 -> "语音识别服务不可用"
                     else -> "识别出错（code=$error）"
                 }
                 onStatus?.invoke(msg)
