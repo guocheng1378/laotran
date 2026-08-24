@@ -80,7 +80,7 @@
         android:background="@drawable/bg_glass_input"
         android:padding="16dp"
         android:hint="输入要翻译的文字…"
-        android:hintTextColor="@color/text_hint"
+        android:textColorHint="@color/text_hint"
         android:textColor="@color/text_primary"
         android:textSize="16sp"
         android:inputType="textMultiLine"
