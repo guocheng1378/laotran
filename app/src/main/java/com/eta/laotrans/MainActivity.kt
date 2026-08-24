@@ -2,12 +2,16 @@ package com.eta.laotrans
 
 import android.Manifest
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
+import android.provider.Settings
+import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
@@ -52,6 +56,9 @@ class MainActivity : AppCompatActivity() {
     // 语音输入：应用内 SpeechRecognizer（自绘界面，识别器就绪后才提示说话）
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
+    private var fallbackToSystemTried = false
+    private var lastListenLang = "zh-CN"
+    private val REQ_SPEECH = 4002
     private val REQ_RECORD_AUDIO = 4003
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -159,11 +166,50 @@ class MainActivity : AppCompatActivity() {
     // ====== 语音输入：应用内 SpeechRecognizer ======
     private fun getRecognizer(): SpeechRecognizer {
         if (speechRecognizer == null) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                setRecognitionListener(speechListener)
+            val cn = findRecognitionComponent()
+            speechRecognizer = if (cn != null) {
+                SpeechRecognizer.createSpeechRecognizer(this, cn)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(this)
             }
+            speechRecognizer?.setRecognitionListener(speechListener)
         }
         return speechRecognizer!!
+    }
+
+    /**
+     * 寻找可用的语音识别服务组件。
+     * 部分 ROM（如精简过的小米）voice_recognition_service 为空，
+     * SpeechRecognizer 默认路径会直接报 ERROR_CLIENT，必须显式指定组件。
+     */
+    private fun findRecognitionComponent(): ComponentName? {
+        // 1) 系统已配置的
+        val configured = Settings.Secure.getString(
+            contentResolver, Settings.Secure.VOICE_RECOGNITION_SERVICE
+        )
+        if (!configured.isNullOrBlank()) {
+            ComponentName.unflattenFromString(configured)?.let { return it }
+        }
+        // 2) 从已安装识别服务中按优先级挑选
+        val services = runCatching {
+            packageManager.queryIntentServices(
+                Intent(RecognitionService.SERVICE_INTERFACE), 0
+            )
+        }.getOrNull().orEmpty()
+        if (services.isEmpty()) return null
+        val preferred = listOf(
+            "com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService",
+            "com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService"
+        )
+        for (flat in preferred) {
+            val cn = ComponentName.unflattenFromString(flat) ?: continue
+            if (services.any {
+                    it.serviceInfo.packageName == cn.packageName &&
+                        it.serviceInfo.name == cn.className
+                }) return cn
+        }
+        val first = services.first()
+        return ComponentName(first.serviceInfo.packageName, first.serviceInfo.name)
     }
 
     private val speechListener = object : RecognitionListener {
@@ -200,6 +246,12 @@ class MainActivity : AppCompatActivity() {
                     SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音服务忙，请稍后再试"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
                     else -> "识别失败（$error），请重试"
+                }
+                // ERROR_CLIENT（识别服务不可用/未配置）时回退到系统识别界面
+                if (error == SpeechRecognizer.ERROR_CLIENT && !fallbackToSystemTried) {
+                    fallbackToSystemTried = true
+                    statusText.text = "应用内识别不可用，改用系统识别…"
+                    launchSystemRecognition(lastListenLang)
                 }
             }
         }
@@ -239,6 +291,7 @@ class MainActivity : AppCompatActivity() {
         val text = inputText.text.toString().trim()
         val (_, tgt) = effectiveDirection(text)
         val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
+        lastListenLang = listenLang
 
         // 检查录音权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -270,6 +323,48 @@ class MainActivity : AppCompatActivity() {
             statusText.text = "没有可用的语音识别服务"
             Toast.makeText(this, "没有可用的语音识别服务", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /** 系统识别 Activity（回退路径：应用内 SpeechRecognizer 不可用时） */
+    private fun launchSystemRecognition(listenLang: String) {
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenLang)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, listenLang)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "请说话…")
+            }
+            startActivityForResult(intent, REQ_SPEECH)
+            statusText.text = "正在聆听…"
+        } catch (e: Exception) {
+            statusText.text = "没有可用的语音识别应用"
+            Toast.makeText(this, "没有可用的语音识别应用", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_SPEECH) return
+        if (resultCode != Activity.RESULT_OK) {
+            statusText.text = "已取消"
+            return
+        }
+        val text = data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (text.isNullOrEmpty()) {
+            statusText.text = "没听清，请再试一次"
+            return
+        }
+        isAutoInserting = true
+        inputText.setText(text)
+        inputText.setSelection(text.length)
+        lastTranslated = ""
+        doTranslate(manual = false)
+        isAutoInserting = false
     }
 
     override fun onRequestPermissionsResult(
