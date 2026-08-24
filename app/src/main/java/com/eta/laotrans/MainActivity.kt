@@ -274,12 +274,23 @@ class MainActivity : AppCompatActivity() {
         autoTranslateJob = lifecycleScope.launch {
             try {
                 val full = StringBuilder()
+                val flushPending = java.util.concurrent.atomic.AtomicBoolean(false)
+                val flushRunnable = object : Runnable {
+                    override fun run() {
+                        flushPending.set(false)
+                        resultText.text = full.toString()
+                    }
+                }
                 val result = TranslateEngine.translateStream(
                     this@MainActivity, text, src, tgt
                 ) { delta ->
                     full.append(delta)
-                    runOnUiThread { resultText.text = full.toString() }
+                    // 节流合并 UI 刷新：每 60ms 最多更新一次主线程，避免逐字刷新卡顿
+                    if (flushPending.compareAndSet(false, true)) {
+                        handler.postDelayed(flushRunnable, 60)
+                    }
                 }
+                handler.post { flushPending.set(false); resultText.text = full.toString() }
                 lastTranslated = text
                 resultText.text = result
                 // 翻译成老挝语时自动朗读（在线 MMS）；译成中文不自动读
