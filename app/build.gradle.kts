@@ -48,6 +48,9 @@ android {
 dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("top.yukonga.miuix.kmp:miuix-ui:0.9.3")
+    implementation("androidx.compose.ui:ui:1.11.2")
+    implementation("androidx.compose.foundation:foundation:1.11.2")
+    implementation("androidx.compose.runtime:runtime:1.11.2")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

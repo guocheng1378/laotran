@@ -80,8 +80,7 @@ private fun LaotranScreen() {
         val tts = TextToSpeech(context) { st ->
             if (st == TextToSpeech.SUCCESS) {
                 ttsReady = true
-                @Suppress("DEPRECATION")
-                tts.language = Locale.CHINA
+                systemTts?.language = Locale.CHINA
             }
         }
         systemTts = tts
@@ -387,7 +386,7 @@ private fun SettingsDialogContent(onDismiss: () -> Unit, onSaved: () -> Unit) {
     var apiKey by remember { mutableStateOf(Config.apiKey(context)) }
     var model by remember { mutableStateOf(Config.model(context)) }
     var locale by remember { mutableStateOf(Config.locale(context)) }
-    top.yukonga.miuix.kmp.overlay.WindowDialog(
+    OverlayDialog(
         show = true,
         title = context.getString(R.string.settings_title),
         onDismissRequest = onDismiss,
