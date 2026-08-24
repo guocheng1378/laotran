@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         dirLabel.setOnClickListener { cycleDirMode() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
+        findViewById<Button>(R.id.historyBtn).setOnClickListener { openHistory() }
         voiceZhBtn = findViewById(R.id.voiceZhBtn)
         voiceLaBtn = findViewById(R.id.voiceLaBtn)
         voiceZhBtn.setOnClickListener { startVoiceInput("zh-CN", 1) }
@@ -165,6 +166,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun label(code: String) = if (code == "zh") "中文" else "老挝语"
+
+    private fun openHistory() {
+        startActivity(Intent(this, HistoryActivity::class.java))
+    }
 
     private fun showSettings() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
@@ -293,6 +298,7 @@ class MainActivity : AppCompatActivity() {
                 handler.post { flushPending.set(false); resultText.text = full.toString() }
                 lastTranslated = text
                 resultText.text = result
+                HistoryStore.add(this@MainActivity, text, result, "${label(src)} → ${label(tgt)}")
                 // 翻译成老挝语时自动朗读（在线 MMS）；译成中文不自动读
                 if (tgt == "lo") {
                     statusText.text = "翻译完成，正在朗读…"
