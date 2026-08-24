@@ -23,15 +23,15 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: 写入 DeepSeek API Key（来自 Secrets）
+      - name: 写入大模型 API Key（来自 Secrets）
         shell: bash
         run: |
-          if [ -n "${{ secrets.DEEPSEEK_API_KEY }}" ]; then
-            echo "DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}" > local.properties
+          if [ -n "${{ secrets.API_KEY }}" ]; then
+            echo "API_KEY=${{ secrets.API_KEY }}" > local.properties
             echo "已写入 API Key 到 local.properties"
           else
-            echo "DEEPSEEK_API_KEY=" > local.properties
-            echo "警告：未设置 Secrets.DEEPSEEK_API_KEY，运行时可翻译但需配置 key"
+            echo "API_KEY=" > local.properties
+            echo "警告：未设置 Secrets.API_KEY，运行时可翻译但需配置 key"
           fi
 
       - name: 编译 Debug APK
