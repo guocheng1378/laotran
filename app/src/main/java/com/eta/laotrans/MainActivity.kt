@@ -1,6 +1,11 @@
 package com.eta.laotrans
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -8,6 +13,8 @@ import android.widget.Toast
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -17,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var resultText: TextView
     private lateinit var statusText: TextView
     private lateinit var dirLabel: TextView
+    private var speechRecognizer: SpeechRecognizer? = null
 
     // 当前方向：默认 中文 → 老挝语
     private var source: String = "zh"
@@ -25,6 +33,8 @@ class MainActivity : AppCompatActivity() {
 
     // 语音语速（默认 1.0）
     private var speakSpeed: Float = 1.0f
+
+    private val RECORD_AUDIO_REQ: Int = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,7 +49,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.swapBtn).setOnClickListener { swapDirection() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
+        findViewById<Button>(R.id.voiceBtn).setOnClickListener { startVoiceInput() }
         setupSpeedControl()
+    }
+
+    override fun onDestroy() {
+        speechRecognizer?.destroy()
+        super.onDestroy()
     }
 
     private fun swapDirection() {
@@ -71,6 +87,91 @@ class MainActivity : AppCompatActivity() {
         statusText.text = hint
     }
 
+    // ====== 语音输入 ======
+    private fun startVoiceInput() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_AUDIO_REQ)
+            return
+        }
+        runVoice()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == RECORD_AUDIO_REQ) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                runVoice()
+            } else {
+                Toast.makeText(this, "需要录音权限才能语音输入", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun runVoice() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            statusText.text = "设备不支持语音识别"
+            Toast.makeText(this, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
+            return
+        }
+        speechRecognizer?.destroy()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+
+        // 老挝语语音识别：lo-LA；若引擎不支持则回落到默认语言
+        val locale = if (source == "lo") java.util.Locale("lo", "LA") else java.util.Locale.getDefault()
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, locale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+
+        speechRecognizer?.setRecognitionListener(object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                statusText.text = "请说${if (source == "lo") "老挝语" else "中文"}…"
+            }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onPartialResults(partialResults: Bundle?) {
+                val r = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!r.isNullOrEmpty()) {
+                    // 实时显示识别中的文字
+                    val txt = r[0]
+                    inputText.setText(txt)
+                    inputText.setSelection(txt.length)
+                }
+            }
+            override fun onResults(results: Bundle?) {
+                val r = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!r.isNullOrEmpty()) {
+                    inputText.setText(r[0])
+                    inputText.setSelection(r[0].length)
+                    statusText.text = "已识别，正在翻译…"
+                    doTranslate()
+                } else {
+                    statusText.text = "未识别到语音"
+                    Toast.makeText(this@MainActivity, "未识别到语音", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onError(error: Int) {
+                val msg = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> "没有听清，请再试"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "未检测到语音"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少录音权限"
+                    SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "识别引擎繁忙"
+                    else -> "语音识别出错（$error）"
+                }
+                statusText.text = msg
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        speechRecognizer?.startListening(intent)
+    }
+
+    // ====== 翻译 ======
     private fun doTranslate() {
         val text = inputText.text.toString().trim()
         if (text.isEmpty()) {
