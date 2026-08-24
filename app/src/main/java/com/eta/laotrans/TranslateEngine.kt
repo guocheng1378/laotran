@@ -15,19 +15,17 @@ import java.util.concurrent.TimeUnit
  * 通过 Chat Completions 让大模型在「中文 ↔ 老挝语」之间互译。
  * 相比 Google 翻译，LLM 对老挝语的长句、口语、人地名、语境的理解更准。
  *
- * 默认使用 DeepSeek。API Key 由 BuildConfig 注入（不硬编码在公开代码里）：
- *   - 本地构建：写入 local.properties 的 DEEPSEEK_API_KEY=sk-xxxx
- *   - GitHub Actions：设置 Secrets.DEEPSEEK_API_KEY 后读入
- *
- * 其它 OpenAI 兼容厂商只需改 BASE_URL / MODEL / KEY：
- *   - OpenAI:   https://api.openai.com/v1                 (gpt-4o-mini)
- *   - Qwen:     https://dashscope.aliyuncs.com/compatible-mode/v1 (qwen-plus)
- *   - Kimi:     https://api.moonshot.cn/v1                (moonshot-v1-8k)
+ * 基础地址：https://api.b.ai/v1  (chat/completions)
+ * MODEL：按你的模型名设置（见下）
+ * API Key 由 BuildConfig 注入（不硬编码在公开代码里）：
+ *   - 本地构建：写入 local.properties 的 API_KEY=xxx
+ *   - GitHub Actions：设置 Secrets.API_KEY 后读入
  */
 object TranslateEngine {
 
-    private const val BASE_URL = "https://api.deepseek.com/v1"
-    private const val MODEL = "deepseek-chat"
+    private const val BASE_URL = "https://api.b.ai/v1"
+    // TODO: 改成你实际使用的模型名
+    private const val MODEL = "b.ai-chat"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -40,8 +38,8 @@ object TranslateEngine {
      */
     suspend fun translate(text: String, source: String, target: String): String =
         withContext(Dispatchers.IO) {
-            val apiKey = BuildConfig.DEEPSEEK_API_KEY
-            if (apiKey.isBlank()) throw IllegalStateException("未配置 DeepSeek API Key，请在 local.properties 填入 DEEPSEEK_API_KEY 或设置 GitHub Secrets")
+            val apiKey = BuildConfig.API_KEY
+            if (apiKey.isBlank()) throw IllegalStateException("未配置大模型 API Key，请在 local.properties 填入 API_KEY 或设置 GitHub Secrets")
 
             val srcName = if (source == "lo") "老挝语" else "中文"
             val tgtName = if (target == "lo") "老挝语" else "中文"
