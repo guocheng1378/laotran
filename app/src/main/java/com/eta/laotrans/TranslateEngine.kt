@@ -166,11 +166,17 @@ object TranslateEngine {
                 val payload = line.removePrefix("data:").trim()
                 if (payload == "[DONE]") break
                 try {
-                    val delta = JSONObject(payload)
+                    // 注意：JSONObject.optString 遇到 JSON null 会返回 "null" 字符串，
+                    // 必须先用 has/isNull 判断，避免把服务端的空 chunk 拼成 "null"
+                    val choice = JSONObject(payload)
                         .getJSONArray("choices")
                         .optJSONObject(0)
-                        ?.optJSONObject("delta")
-                        ?.optString("content") ?: ""
+                    val deltaObj = choice?.optJSONObject("delta")
+                    val delta = if (deltaObj != null && deltaObj.has("content") && !deltaObj.isNull("content")) {
+                        deltaObj.optString("content")
+                    } else {
+                        ""
+                    }
                     if (delta.isNotEmpty()) {
                         full.append(delta)
                         onDelta(delta)
