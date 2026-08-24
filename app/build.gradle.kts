@@ -23,8 +23,8 @@ android {
         applicationId = "com.eta.laotrans"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.3"
 
         // 注入大模型 API Key 到 BuildConfig
         buildConfigField("String", "API_KEY", "\"${apiKey}\"")
