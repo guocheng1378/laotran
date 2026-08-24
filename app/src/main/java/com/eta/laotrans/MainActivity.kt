@@ -7,7 +7,6 @@ import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -57,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.swapBtn).setOnClickListener { toggleForceReverse() }
         findViewById<Button>(R.id.speakBtn).setOnClickListener { doSpeak() }
         findViewById<Button>(R.id.settingsBtn).setOnClickListener { showSettings() }
-        findViewById<Button>(R.id.voiceBtn).setOnClickListener { openKeyboardVoice() }
+        findViewById<Button>(R.id.voiceBtn).setOnClickListener { startVoiceInput() }
         setupSpeedControl()
         setupAutoTranslate()
         setupTts()
@@ -124,12 +123,35 @@ class MainActivity : AppCompatActivity() {
         SettingsDialog.show(this) { /* 配置变化后无需额外刷新 */ }
     }
 
-    // ====== 语音输入：改由系统键盘的语音听写提供 ======
-    private fun openKeyboardVoice() {
-        inputText.requestFocus()
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.showSoftInput(inputText, InputMethodManager.SHOW_IMPLICIT)
-        statusText.text = "请在键盘上点击麦克风图标语音输入"
+    // ====== 语音输入：系统 SpeechRecognizer（Collins 同款） ======
+    private fun startVoiceInput() {
+        // 听写语言与翻译方向相反：要把中文译成老挝语，就听写中文；反之听老挝语
+        val text = inputText.text.toString().trim()
+        val (_, tgt) = effectiveDirection(text.ifEmpty { "" })
+        val listenLang = if (tgt == "lo") "zh-CN" else "lo-LA"
+
+        if (!SpeechInput.isAvailable(this)) {
+            statusText.text = "本机没有可用的语音识别服务"
+            return
+        }
+        statusText.text = "正在聆听…"
+        SpeechInput.start(this, listenLang) { recognized ->
+            isAutoInserting = true
+            inputText.setText(recognized)
+            inputText.setSelection(recognized.length)
+            isAutoInserting = false
+            lastTranslated = ""
+            doTranslate(manual = false)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        SpeechInput.onRequestPermissionsResult(requestCode, grantResults, this)
     }
 
     // ====== 翻译 ======
@@ -245,6 +267,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         autoTranslateJob?.cancel()
+        SpeechInput.release()
         systemTts?.stop()
         systemTts?.shutdown()
         super.onDestroy()
