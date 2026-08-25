@@ -82,7 +82,7 @@ object TranslateEngine {
         text: String,
         source: String,
         target: String,
-        onDelta: (String) -> Unit
+        onDelta: suspend (String) -> Unit
     ): String = withContext(Dispatchers.IO) {
         val key = cacheKey(source, target, text)
         cacheGet(key)?.let { cached ->
