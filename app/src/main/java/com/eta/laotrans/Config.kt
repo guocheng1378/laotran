@@ -41,5 +41,9 @@ object Config {
             .apply()
     }
 
-    fun isConfigured(c: Context): Boolean = apiKey(c).isNotBlank()
+    /**
+     * 是否已具备可翻译的配置。
+     * 仅当 API Key 与 Model 都已填写才算配置完成。
+     */
+    fun isConfigured(c: Context): Boolean = apiKey(c).isNotBlank() && model(c).isNotBlank()
 }

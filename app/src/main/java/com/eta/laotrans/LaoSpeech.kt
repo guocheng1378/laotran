@@ -20,6 +20,9 @@ import java.util.concurrent.TimeUnit
  *
  * 原理：把老挝语文本发给在线 Gradio Space（kenjichou/lao-tts-api），
  * 拿到生成的 wav 文件，再用 MediaPlayer 播放。
+ *
+ * 模块持有当前播放器引用（[currentPlayer]），避免播放中被 GC 回收；
+ * 播放新的音频前会先停止并释放旧的。
  */
 object LaoSpeech {
 
@@ -29,8 +32,20 @@ object LaoSpeech {
         .readTimeout(90, TimeUnit.SECONDS)
         .build()
 
+    @Volatile
+    private var currentPlayer: MediaPlayer? = null
+
+    /** 停止并释放当前正在播放的音频（若存在）。 */
+    fun stop() {
+        currentPlayer?.let {
+            runCatching { it.stop() }
+            runCatching { it.release() }
+        }
+        currentPlayer = null
+    }
+
     /**
-     * 合成老挝语音并播放。返回 true 表示已触发播放。
+     * 合成老挝语音并播放。返回 true 表示已成功触发播放。
      */
     suspend fun speak(text: String, context: Context, speed: Float = 1.0f): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -71,7 +86,6 @@ object LaoSpeech {
                 val line = source.readUtf8Line() ?: break
                 sb.append(line).append("\n")
                 if (line.contains("process_completed")) {
-                    // 该行形如: data: {"msg":"process_completed",...,"output":{"data":[{...,"url":"https:\/\/...\/output.wav",...}]}}
                     val jsonStr = line.substringAfter("data:").trim()
                     wavUrl = jsonStr.let {
                         runCatching {
@@ -87,13 +101,13 @@ object LaoSpeech {
             }
             pollResp.close()
 
-            // 兜底：若上面没解析到，再用宽松正则（允许反斜杠）从全文取 url
+            // 兜底：若上面没解析到，再用宽松正则从全文取 url
             if (wavUrl.isNullOrBlank()) {
                 wavUrl = Regex("\"url\":\"([^\"]+)\"").find(sb.toString())?.groupValues?.get(1)
             }
             wavUrl = wavUrl?.trim()?.takeIf { it.isNotBlank() } ?: return@withContext false
 
-            // JSONObject 解析后 url 已无 \/ 转义；正则兜底时可能带回转义，统一还原
+            // 还原可能的 \/ 转义
             wavUrl = wavUrl.replace("\\/", "/")
             if (!wavUrl.startsWith("http")) return@withContext false
 
@@ -106,24 +120,31 @@ object LaoSpeech {
 
             if (bytes.isEmpty()) return@withContext false
 
-            // 4) 保存到缓存并播放
+            // 4) 保存到缓存并播放（先停止旧播放器，再持有新引用）
             val wavFile = File(context.cacheDir, "lao_speak_${System.currentTimeMillis()}.wav")
             FileOutputStream(wavFile).use { it.write(bytes) }
 
             withContext(Dispatchers.Main) {
-                MediaPlayer().apply {
-                    setDataSource(wavFile.absolutePath)
-                    setOnCompletionListener { it.release() }
-                    prepare()
-                    if (speed > 0f && speed != 1.0f) {
-                        try {
-                            setPlaybackParams(PlaybackParams().setSpeed(speed))
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    start()
+                currentPlayer?.let {
+                    runCatching { it.stop() }
+                    runCatching { it.release() }
                 }
+                val player = MediaPlayer()
+                currentPlayer = player
+                player.setDataSource(wavFile.absolutePath)
+                player.setOnCompletionListener { mp ->
+                    runCatching { mp.release() }
+                    if (currentPlayer === mp) currentPlayer = null
+                }
+                player.prepare()
+                if (speed > 0f && speed != 1.0f) {
+                    try {
+                        player.setPlaybackParams(PlaybackParams().setSpeed(speed))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                player.start()
             }
             true
         } catch (e: Exception) {

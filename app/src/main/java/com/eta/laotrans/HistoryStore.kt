@@ -29,9 +29,17 @@ object HistoryStore {
         // 原文+译文相同时只保留最新一条（更新时间）
         list.removeAll { it.srcText == srcText && it.dstText == dstText }
         val now = System.currentTimeMillis()
-        list.add(0, HistoryRecord(now, now, srcText, dstText, direction))
+        // id 在现有最大 id 基础上取唯一值，避免同一毫秒多条记录 id 冲突导致误删
+        list.add(0, HistoryRecord(nextId(list, now), now, srcText, dstText, direction))
         while (list.size > MAX) list.removeAt(list.size - 1)
         save(c, list)
+    }
+
+    /** 保证 id 唯一：从 base 开始，若与已有记录撞 id 则递增。 */
+    private fun nextId(list: List<HistoryRecord>, base: Long): Long {
+        var id = base
+        while (list.any { it.id == id }) id += 1
+        return id
     }
 
     fun list(c: Context): List<HistoryRecord> {

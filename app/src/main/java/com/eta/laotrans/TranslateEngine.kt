@@ -13,29 +13,33 @@ import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * 翻译引擎（大模型 LLM，OpenAI 兼容接口）
+ * 翻译引擎（大模型 LLM，OpenAI 兼容接口）。
  *
- * 所有配置（接口地址 / API Key / 模型名）在 App 内的设置界面里填，
- * 通过 [Config] 持久化。
+ * 所有配置（接口地址 / API Key / 模型名）在 App 内的设置界面里填，通过 [Config] 持久化。
  *
  * 方向自动识别：输入含老挝字母 → 译成中文；否则 → 译成老挝语。
  * 翻译成老挝语时输出两行：老挝语译文 + 「转写：<罗马音>」。
  * 翻译成中文时输出两行：中文译文 + 「拼音：<汉语拼音>」。
  * 支持 [translateStream] 流式翻译：边生成边通过 onDelta 回调显示。
  *
- * 已内置 LRU 翻译缓存：相同来源/目标/文本会直接命中缓存，跳过 LLM 请求，显著提速。
+ * 内置 LRU 翻译缓存：相同来源/目标/文本会直接命中缓存，跳过 LLM 请求，显著提速。
  */
 object TranslateEngine {
 
+    /** 一次性/普通请求客户端。 */
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS) // 大模型响应可能慢
+        .readTimeout(90, TimeUnit.SECONDS)
         .build()
 
-    /** 无读超时限制的客户端，专用于流式请求 */
+    /**
+     * 流式请求客户端：SSE 长连接需要不限读超时（readTimeout=0），
+     * 但用 callTimeout 限制整次调用的最大时长，防止服务端挂起时无限等待。
+     */
     private val streamClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
+        .callTimeout(180, TimeUnit.SECONDS)
         .build()
 
     // ====== 翻译缓存（LRU） ======
@@ -68,80 +72,6 @@ object TranslateEngine {
      */
     fun autoDetect(text: String): Pair<String, String> =
         if (containsLao(text)) "lo" to "zh" else "zh" to "lo"
-
-    /**
-     * 拉取该接口可用的模型列表。成功返回模型 id 列表；失败抛异常。
-     */
-    suspend fun listModels(context: Context): List<String> =
-        withContext(Dispatchers.IO) {
-            val baseUrl = Config.baseUrl(context)
-            val key = Config.apiKey(context)
-            if (key.isBlank()) throw IllegalStateException("请先在设置里填写 API Key")
-
-            val req = Request.Builder()
-                .url(baseUrl.trimEnd('/') + "/models")
-                .header("Authorization", "Bearer $key")
-                .build()
-
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string() ?: throw IllegalStateException("空响应")
-                if (!resp.isSuccessful) {
-                    throw IllegalStateException("获取模型失败 HTTP ${resp.code}: $body")
-                }
-                val data = JSONObject(body).optJSONArray("data") ?: JSONArray()
-                val names = mutableListOf<String>()
-                for (i in 0 until data.length()) {
-                    data.getJSONObject(i).optString("id").takeIf { it.isNotBlank() }?.let { names.add(it) }
-                }
-                if (names.isEmpty()) throw IllegalStateException("该接口未返回可用模型")
-                names
-            }
-        }
-
-    /**
-     * 翻译文本（一次性返回）。source/target："zh"/"lo"。
-     */
-    suspend fun translate(context: Context, text: String, source: String, target: String): String =
-        withContext(Dispatchers.IO) {
-            val key = cacheKey(source, target, text)
-            cacheGet(key)?.let { return@withContext it }
-
-            val baseUrl = Config.baseUrl(context)
-            val keyToken = Config.apiKey(context)
-            val model = Config.model(context)
-            if (keyToken.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
-            if (model.isBlank()) throw IllegalStateException("请先在设置里选择模型（⚙️ 设置）")
-
-            val srcName = if (source == "lo") "老挝语" else "中文"
-            val tgtName = if (target == "lo") "老挝语" else "中文"
-
-            val body = JSONObject()
-                .put("model", model)
-                .put("messages", JSONArray()
-                    .put(JSONObject().put("role", "system").put("content", systemPrompt()))
-                    .put(JSONObject().put("role", "user").put("content", buildPrompt(text, srcName, tgtName, target))))
-                .put("temperature", 0.2)
-
-            val req = Request.Builder()
-                .url(baseUrl.trimEnd('/') + "/chat/completions")
-                .post(body.toString().toRequestBody("application/json".toMediaType()))
-                .header("Authorization", "Bearer $keyToken")
-                .build()
-
-            val result = client.newCall(req).execute().use { resp ->
-                val respBody = resp.body?.string() ?: throw IllegalStateException("空响应")
-                if (!resp.isSuccessful) {
-                    throw IllegalStateException("翻译请求失败 HTTP ${resp.code}: $respBody")
-                }
-                val choices = JSONObject(respBody).getJSONArray("choices")
-                choices.getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content")
-                    .trim()
-            }
-            cachePut(key, result)
-            result
-        }
 
     /**
      * 流式翻译：SSE 边生成边回调。onDelta 在后台线程被调用；
@@ -197,8 +127,8 @@ object TranslateEngine {
                 val payload = line.removePrefix("data:").trim()
                 if (payload == "[DONE]") break
                 try {
-                    // 注意：JSONObject.optString 遇到 JSON null 会返回 "null" 字符串，
-                    // 必须先用 has/isNull 判断，避免把服务端的空 chunk 拼成 "null"
+                    // JSONObject.optString 遇到 JSON null 会返回 "null" 字符串，
+                    // 必须先判断 has/isNull，避免把服务端的空 chunk 拼成 "null"。
                     val choice = JSONObject(payload)
                         .getJSONArray("choices")
                         .optJSONObject(0)

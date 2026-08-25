@@ -60,4 +60,7 @@
     <string name="voice_lo">🇱🇦 老挝语</string>
     <string name="clear_btn">✕</string>
     <string name="clear_cd">清空输入</string>
+    <string name="result_label">译文</string>
+    <string name="result_empty">译文将显示在这里</string>
+    <string name="history_empty">暂无历史记录</string>
 </resources>

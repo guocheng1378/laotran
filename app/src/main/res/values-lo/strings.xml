@@ -60,4 +60,7 @@
     <string name="voice_lo">🇱🇦 ພາສາລາວ</string>
     <string name="clear_btn">✕</string>
     <string name="clear_cd">ລຶບຂໍ້ຄວາມ</string>
+    <string name="result_label">ຄຳແປ</string>
+    <string name="result_empty">ຄຳແປຈະສະແດງຢູ່ທີ່ນີ້</string>
+    <string name="history_empty">ຍັງບໍ່ມີປະຫວັດການແປ</string>
 </resources>
