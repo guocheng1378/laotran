@@ -8,6 +8,7 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,8 +31,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -134,23 +139,34 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
     Scaffold {
         Box(Modifier.fillMaxSize().padding(16.dp)) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // ====== 顶栏 ======
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text(context.getString(R.string.app_name), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text(context.getString(R.string.app_subtitle), fontSize = 12.sp)
+                        Text(context.getString(R.string.app_name), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                        Text(context.getString(R.string.app_subtitle), fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                     }
-                    Row {
-                        TextButton(text = "🕘", onClick = { vm.showHistory = true })
-                        TextButton(text = "⚙︎", onClick = { vm.showSettings = true })
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(Modifier.clip(RoundedCornerShape(50)).background(MiuixTheme.colorScheme.surfaceContainerHigh)) {
+                            TextButton(text = "🕘", onClick = { vm.showHistory = true })
+                        }
+                        Box(Modifier.clip(RoundedCornerShape(50)).background(MiuixTheme.colorScheme.surfaceContainerHigh)) {
+                            TextButton(text = "⚙", onClick = { vm.showSettings = true })
+                        }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
-                TextButton(
-                    text = vm.dirLabelTextForUi(context),
-                    onClick = { vm.cycleDirMode(context) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(18.dp))
+
+                // ====== 方向模式（主容器色分段块） ======
+                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MiuixTheme.colorScheme.primaryContainer)) {
+                    TextButton(
+                        text = vm.dirLabelTextForUi(context),
+                        onClick = { vm.cycleDirMode(context) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                // ====== 输入区 ======
                 TextField(
                     value = vm.input,
                     onValueChange = { vm.input = it },
@@ -158,13 +174,19 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                     useLabelAsPlaceholder = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+
+                // ====== 工具行：清空 + 语音 ======
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(text = context.getString(R.string.clear_btn), onClick = { vm.clearInput() })
-                    TextButton(text = context.getString(R.string.voice_zh), onClick = { startVoice("zh-CN", 1) })
-                    TextButton(text = context.getString(R.string.voice_lo), onClick = { startVoice("lo-LA", 2) })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(text = context.getString(R.string.voice_zh), onClick = { startVoice("zh-CN", 1) })
+                        TextButton(text = context.getString(R.string.voice_lo), onClick = { startVoice("lo-LA", 2) })
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+
+                // ====== 翻译 + 互换 ======
                 Row(Modifier.fillMaxWidth()) {
                     TextButton(
                         text = context.getString(R.string.btn_translate),
@@ -180,16 +202,26 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                     )
                 }
 
-                // ====== 译文结果区（独立标题，避免与「朗读语速」混放） ======
+                // ====== 译文结果区 ======
                 Spacer(Modifier.height(12.dp))
                 SmallTitle(context.getString(R.string.result_label))
                 Card(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(14.dp)) {
                         Text(vm.result.ifEmpty { context.getString(R.string.result_empty) }, fontSize = 16.sp)
-                        Text(vm.status, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                        Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(top = 8.dp))
+                        if (vm.result.isNotEmpty()) {
+                            val clipboard = LocalClipboardManager.current
+                            TextButton(
+                                text = "复制",
+                                onClick = { clipboard.setText(AnnotatedString(vm.result)) },
+                                colors = ButtonDefaults.textButtonColorsPrimary(),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+
+                // ====== 朗读 ======
                 TextButton(
                     text = context.getString(R.string.btn_speak),
                     onClick = { vm.speak(context) },
@@ -197,10 +229,10 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                     colors = ButtonDefaults.textButtonColorsPrimary(),
                 )
 
-                // ====== 朗读语速区 ======
+                // ====== 朗读语速 ======
                 Spacer(Modifier.height(6.dp))
                 SmallTitle(context.getString(R.string.speed_label))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
                     speeds.forEach { s ->
                         TextButton(
