@@ -102,7 +102,7 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            if (vm.dirMode != pendingVoiceDir) vm.setDirMode(pendingVoiceDir)
+            if (vm.dirMode != pendingVoiceDir) vm.dirMode = pendingVoiceDir
             launchRecognition(pendingVoiceLang)
         } else {
             vm.setPermissionDeniedStatus(context)
@@ -110,7 +110,7 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
     }
 
     fun startVoice(listenLang: String, forcedDir: Int) {
-        if (vm.dirMode != forcedDir) vm.setDirMode(forcedDir)
+        if (vm.dirMode != forcedDir) vm.dirMode = forcedDir
         if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             pendingVoiceLang = listenLang

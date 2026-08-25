@@ -77,9 +77,6 @@ class TranslationViewModel : ViewModel() {
         }
     }
 
-    fun setDirMode(mode: Int) {
-        dirMode = mode
-    }
 
     fun cycleDirMode(context: Context) {
         dirMode = (dirMode + 1) % 3
