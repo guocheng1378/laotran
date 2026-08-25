@@ -356,15 +356,15 @@ private fun LaotranScreen() {
         }
     }
 
-    if (showSettings) {
-        SettingsDialogContent(
-            onDismiss = { showSettings = false },
-            onSaved = { showSettings = false },
-        )
-    }
-    if (showHistory) {
-        HistoryScreenContent(onBack = { showHistory = false })
-    }
+    SettingsDialogContent(
+        show = showSettings,
+        onDismiss = { showSettings = false },
+        onSaved = { showSettings = false },
+    )
+    HistoryScreenContent(
+        show = showHistory,
+        onBack = { showHistory = false },
+    )
 }
 
 private fun speedText(v: Float): String = when (v) {
@@ -380,14 +380,14 @@ private fun loadSpeakSpeed(context: android.content.Context): Float =
     context.getSharedPreferences("laotrans_prefs", android.content.Context.MODE_PRIVATE).getFloat("speak_speed", 1.0f)
 
 @Composable
-private fun SettingsDialogContent(onDismiss: () -> Unit, onSaved: () -> Unit) {
+private fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     var baseUrl by remember { mutableStateOf(Config.baseUrl(context)) }
     var apiKey by remember { mutableStateOf(Config.apiKey(context)) }
     var model by remember { mutableStateOf(Config.model(context)) }
     var locale by remember { mutableStateOf(Config.locale(context)) }
     OverlayDialog(
-        show = true,
+        show = show,
         title = context.getString(R.string.settings_title),
         onDismissRequest = onDismiss,
         onDismissFinished = onDismiss,
@@ -410,47 +410,42 @@ private fun SettingsDialogContent(onDismiss: () -> Unit, onSaved: () -> Unit) {
 }
 
 @Composable
-private fun HistoryScreenContent(onBack: () -> Unit) {
+private fun HistoryScreenContent(show: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var records by remember { mutableStateOf(HistoryStore.list(context)) }
-    Box(Modifier.fillMaxSize().padding(16.dp)) {
-        Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(text = "‹ 返回", onClick = onBack)
-                Text(context.getString(R.string.history_title), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                TextButton(text = context.getString(R.string.history_clear), onClick = {
-                    HistoryStore.clear(context)
-                    records = HistoryStore.list(context)
-                })
-            }
-            if (records.isEmpty()) {
-                Text(
-                    context.getString(R.string.history_nothing),
-                    modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally),
-                )
-            } else {
-                Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-                    records.forEach { r ->
-                        Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(r.direction, fontSize = 11.sp)
-                                Text(r.srcText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-                                Text(r.dstText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                    TextButton(text = context.getString(R.string.btn_play), onClick = {
-                                        scope.launch { LaoSpeech.speak(r.dstText, context) }
-                                    })
-                                    TextButton(text = context.getString(R.string.btn_delete), onClick = {
-                                        HistoryStore.remove(context, r.id)
-                                        records = HistoryStore.list(context)
-                                    })
+    OverlayDialog(
+        show = show,
+        title = context.getString(R.string.history_title),
+        onDismissRequest = onBack,
+        onDismissFinished = onBack,
+        content = {
+            Column(Modifier.fillMaxWidth()) {
+                if (records.isEmpty()) {
+                    Text(context.getString(R.string.history_nothing), modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally))
+                } else {
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        records.forEach { r ->
+                            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(r.direction, fontSize = 11.sp)
+                                    Text(r.srcText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                                    Text(r.dstText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        TextButton(text = context.getString(R.string.btn_play), onClick = { scope.launch { LaoSpeech.speak(r.dstText, context) } })
+                                        TextButton(text = context.getString(R.string.btn_delete), onClick = { HistoryStore.remove(context, r.id); records = HistoryStore.list(context) })
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(text = context.getString(R.string.history_clear), onClick = { HistoryStore.clear(context); records = HistoryStore.list(context) })
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(text = "‹ 返回", onClick = onBack)
+                }
             }
-        }
-    }
+        },
+    )
 }
