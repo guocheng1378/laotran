@@ -60,6 +60,9 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Translate
+import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -222,7 +225,7 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
             GlassCard {
                 SmallTitle(context.getString(R.string.result_label))
                 Text(vm.result.ifEmpty { context.getString(R.string.result_empty) }, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 10.dp))
-                Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(top = 8.dp))
                 if (vm.result.isNotEmpty()) {
                     val clipboard = LocalClipboardManager.current
                     GlassButton(
@@ -244,8 +247,8 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                 Spacer(Modifier.height(16.dp))
                 var speedLocal by remember { mutableStateOf(vm.speakSpeed) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(context.getString(R.string.speed_label), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                    Text("${vm.speakSpeed}×", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariant)
+                    Text(context.getString(R.string.speed_label), fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.weight(1f))
+                    Text("${vm.speakSpeed}×", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                 }
                 Slider(
                     value = speedLocal,
