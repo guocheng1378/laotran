@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -279,7 +280,8 @@ private fun LaotranScreen() {
         doTranslate(false)
     }
 
-    Box(Modifier.fillMaxSize().padding(16.dp)) {
+    Scaffold {
+        Box(Modifier.fillMaxSize().padding(16.dp)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
@@ -365,6 +367,7 @@ private fun LaotranScreen() {
         show = showHistory,
         onBack = { showHistory = false },
     )
+    }
 }
 
 private fun speedText(v: Float): String = when (v) {
