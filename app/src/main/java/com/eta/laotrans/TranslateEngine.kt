@@ -152,6 +152,25 @@ object TranslateEngine {
         result
     }
 
+    // ====== 模型列表 ======
+
+    /** 拉取服务端可用模型列表（OpenAI 兼容 GET /models）。失败返回空列表。 */
+    fun listModelsSync(baseUrl: String, apiKey: String): List<String> {
+        if (baseUrl.isBlank()) return emptyList()
+        val req = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/models")
+            .header("Authorization", "Bearer $apiKey")
+            .build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) return emptyList()
+            val body = resp.body?.string() ?: return emptyList()
+            val data = JSONObject(body).optJSONArray("data") ?: return emptyList()
+            return (0 until data.length()).mapNotNull { i ->
+                data.optJSONObject(i)?.optString("id")?.takeIf { it.isNotBlank() }
+            }.distinct()
+        }
+    }
+
     // ====== prompt 构造 ======
 
     private fun systemPrompt(): String =
