@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,7 +34,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 
 /**
  * 大模型设置对话框：接口地址 / API Key / 模型名。
- * 模型支持下拉选择（从 GET /models 拉取真实可用模型），也可手动输入。
+ * 模型支持下拉选择（从 GET /models 拉取真实可用模型），列表可滚动，也可手动输入。
  * 保存后写入 SharedPreferences（Config）。
  */
 @Composable
@@ -67,7 +70,7 @@ internal fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved
                     TextField(value = apiKey, onValueChange = { apiKey = it }, label = context.getString(R.string.settings_api_key), useLabelAsPlaceholder = true)
                     TextField(value = model, onValueChange = { model = it }, label = context.getString(R.string.settings_model), useLabelAsPlaceholder = true)
 
-                    // 模型下拉：点击展开可用模型列表，点选回填
+                    // 模型下拉：点击展开可用模型列表，列表可滚动，点选回填
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -88,7 +91,13 @@ internal fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved
 
                     if (modelMenuExpanded) {
                         Card(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                            Column(Modifier.padding(vertical = 6.dp)) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 6.dp)
+                            ) {
                                 if (modelsLoading) {
                                     Text("加载中…", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
                                 } else if (candidates.isEmpty()) {
