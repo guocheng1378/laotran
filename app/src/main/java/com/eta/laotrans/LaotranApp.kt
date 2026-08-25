@@ -8,6 +8,7 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,8 +57,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
@@ -179,26 +178,7 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            FloatingNavigationBar(color = Color(0xF2FFFFFF)) {
-                FloatingNavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = MiuixIcons.Translate,
-                    label = "翻译",
-                )
-                FloatingNavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = MiuixIcons.Refresh,
-                    label = "历史",
-                )
-                FloatingNavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = MiuixIcons.Settings,
-                    label = "设置",
-                )
-            }
+            BottomNavBar(selectedTab = selectedTab, onSelect = { selectedTab = it })
         }
     }
 }
@@ -437,5 +417,52 @@ private fun GlassIconButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = MiuixTheme.colorScheme.onSurface)
+    }
+}
+
+
+@Composable
+private fun BottomNavBar(
+    selectedTab: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color(0xEEFFFFFF))
+            .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(28.dp))
+            .padding(horizontal = 6.dp, vertical = 6.dp)
+    ) {
+        BottomNavItem("翻译", MiuixIcons.Translate, selectedTab == 0, { onSelect(0) }, Modifier.weight(1f))
+        BottomNavItem("历史", MiuixIcons.Refresh, selectedTab == 1, { onSelect(1) }, Modifier.weight(1f))
+        BottomNavItem("设置", MiuixIcons.Settings, selectedTab == 2, { onSelect(2) }, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun BottomNavItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.82f else 1f, label = "navScale")
+    val bg by animateColorAsState(if (selected) Color(0xFFE7EEFF) else Color.Transparent, label = "navBg")
+    val fg = if (selected) Color(0xFF3482FF) else Color(0x99000000)
+    Column(
+        modifier = modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(22.dp))
+            .background(bg)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = label, tint = fg)
+        Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 3.dp))
     }
 }
