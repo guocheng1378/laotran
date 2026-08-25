@@ -8,9 +8,12 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,7 +60,6 @@ import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Slider
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -157,110 +160,16 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
         // ====== 液态玻璃氛围背景 ======
         GlassBackground()
 
-        // ====== 主内容 ======
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-                .padding(bottom = 110.dp)
-        ) {
-            // ====== 顶栏（玻璃） ======
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text(context.getString(R.string.app_name), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text(context.getString(R.string.app_subtitle), fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f))
-                }
-                GlassIconButton(icon = MiuixIcons.Settings, onClick = { vm.showSettings = true })
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // ====== 输入卡（方向 + 输入 + 语音工具） ======
-            GlassCard {
-                // 方向模式：玻璃按钮，点击循环
-                GlassButton(
-                    text = vm.dirLabelTextForUi(context),
-                    onClick = { vm.cycleDirMode(context) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                TextField(
-                    value = vm.input,
-                    onValueChange = { vm.input = it },
-                    label = context.getString(R.string.hint_input),
-                    useLabelAsPlaceholder = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassButton(
-                        text = context.getString(R.string.voice_zh),
-                        onClick = { startVoice("zh-CN", 1) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    GlassButton(
-                        text = context.getString(R.string.voice_lo),
-                        onClick = { startVoice("lo-LA", 2) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    GlassButton(
-                        text = context.getString(R.string.clear_btn),
-                        onClick = { vm.clearInput() },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // ====== 翻译主按钮（玻璃 primary） ======
-            GlassButton(
-                text = context.getString(R.string.btn_translate),
-                onClick = { vm.translate(context, true) },
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                primary = true,
+        // ====== 主内容（随底栏 tab 切换） ======
+        when (selectedTab) {
+            1 -> HistoryPanel(onBack = { selectedTab = 0 })
+            2 -> SettingsPanel(onBack = { selectedTab = 0 }, onSaved = { selectedTab = 0 })
+            else -> TranslateContent(
+                vm = vm,
+                context = context,
+                startVoice = ::startVoice,
+                onOpenSettings = { selectedTab = 2 },
             )
-            Spacer(Modifier.height(16.dp))
-
-            // ====== 译文结果卡 ======
-            GlassCard {
-                SmallTitle(context.getString(R.string.result_label))
-                Text(vm.result.ifEmpty { context.getString(R.string.result_empty) }, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 10.dp))
-                Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(top = 8.dp))
-                if (vm.result.isNotEmpty()) {
-                    val clipboard = LocalClipboardManager.current
-                    GlassButton(
-                        text = "复制",
-                        onClick = { clipboard.setText(AnnotatedString(vm.result)) },
-                        modifier = Modifier.padding(top = 12.dp),
-                        primary = true,
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
-            // ====== 朗读 + 语速滑块卡 ======
-            GlassCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(context.getString(R.string.btn_speak), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-                    GlassButton(text = "朗读", onClick = { vm.speak(context) })
-                }
-                Spacer(Modifier.height(16.dp))
-                var speedLocal by remember { mutableStateOf(vm.speakSpeed) }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(context.getString(R.string.speed_label), fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.weight(1f))
-                    Text("${vm.speakSpeed}×", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                }
-                Slider(
-                    value = speedLocal,
-                    onValueChange = { speedLocal = it },
-                    onValueChangeFinished = { vm.setSpeed(context, speedLocal) },
-                    valueRange = 0.75f..2.0f,
-                    keyPoints = listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f),
-                    showKeyPoints = true,
-                    magnetThreshold = 0.1f,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                )
-            }
         }
 
         // ====== 底部 Miuix 悬浮玻璃导航栏 ======
@@ -279,29 +188,139 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                 )
                 FloatingNavigationBarItem(
                     selected = selectedTab == 1,
-                    onClick = { vm.showHistory = true; selectedTab = 0 },
+                    onClick = { selectedTab = 1 },
                     icon = MiuixIcons.Refresh,
                     label = "历史",
                 )
                 FloatingNavigationBarItem(
                     selected = selectedTab == 2,
-                    onClick = { vm.showSettings = true; selectedTab = 0 },
+                    onClick = { selectedTab = 2 },
                     icon = MiuixIcons.Settings,
                     label = "设置",
                 )
             }
         }
     }
+}
 
-    SettingsDialogContent(
-        show = vm.showSettings,
-        onDismiss = { vm.showSettings = false },
-        onSaved = { vm.showSettings = false },
-    )
-    HistoryScreenContent(
-        show = vm.showHistory,
-        onBack = { vm.showHistory = false },
-    )
+// ================= 翻译主内容 =================
+
+@Composable
+private fun TranslateContent(
+    vm: TranslationViewModel,
+    context: android.content.Context,
+    startVoice: (String, Int) -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+            .padding(bottom = 110.dp)
+    ) {
+        // ====== 顶栏（玻璃） ======
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text(context.getString(R.string.app_name), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(context.getString(R.string.app_subtitle), fontSize = 13.sp, color = Color.White.copy(alpha = 0.85f))
+            }
+            GlassIconButton(icon = MiuixIcons.Settings, onClick = onOpenSettings)
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ====== 输入卡（方向 + 输入 + 语音工具） ======
+        GlassCard {
+            // 方向模式：玻璃按钮，点击循环
+            GlassButton(
+                text = vm.dirLabelTextForUi(context),
+                onClick = { vm.cycleDirMode(context) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            TextField(
+                value = vm.input,
+                onValueChange = { vm.input = it },
+                label = context.getString(R.string.hint_input),
+                useLabelAsPlaceholder = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassButton(
+                    text = context.getString(R.string.voice_zh),
+                    onClick = { startVoice("zh-CN", 1) },
+                    modifier = Modifier.weight(1f),
+                )
+                GlassButton(
+                    text = context.getString(R.string.voice_lo),
+                    onClick = { startVoice("lo-LA", 2) },
+                    modifier = Modifier.weight(1f),
+                )
+                GlassButton(
+                    text = context.getString(R.string.clear_btn),
+                    onClick = { vm.clearInput() },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ====== 翻译主按钮（玻璃 primary） ======
+        GlassButton(
+            text = context.getString(R.string.btn_translate),
+            onClick = { vm.translate(context, true) },
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            primary = true,
+        )
+        Spacer(Modifier.height(16.dp))
+
+        // ====== 译文结果卡（标题与内容左对齐） ======
+        GlassCard {
+            Text(
+                context.getString(R.string.result_label),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Text(vm.result.ifEmpty { context.getString(R.string.result_empty) }, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 10.dp))
+            Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(top = 8.dp))
+            if (vm.result.isNotEmpty()) {
+                val clipboard = LocalClipboardManager.current
+                GlassButton(
+                    text = "复制",
+                    onClick = { clipboard.setText(AnnotatedString(vm.result)) },
+                    modifier = Modifier.padding(top = 12.dp),
+                    primary = true,
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ====== 朗读 + 语速滑块卡 ======
+        GlassCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(context.getString(R.string.btn_speak), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                GlassButton(text = "朗读", onClick = { vm.speak(context) })
+            }
+            Spacer(Modifier.height(16.dp))
+            var speedLocal by remember { mutableStateOf(vm.speakSpeed) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(context.getString(R.string.speed_label), fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.weight(1f))
+                Text("${vm.speakSpeed}×", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+            }
+            Slider(
+                value = speedLocal,
+                onValueChange = { speedLocal = it },
+                onValueChangeFinished = { vm.setSpeed(context, speedLocal) },
+                valueRange = 0.75f..2.0f,
+                keyPoints = listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f),
+                showKeyPoints = true,
+                magnetThreshold = 0.1f,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        }
+    }
 }
 
 // ================= 液态玻璃基础组件 =================
@@ -373,15 +392,23 @@ private fun GlassButton(
     primary: Boolean = false,
 ) {
     val shape = RoundedCornerShape(15.dp)
-    val bg = if (primary) MiuixTheme.colorScheme.primary.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.55f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, label = "btnScale")
+    val bg = if (primary) {
+        MiuixTheme.colorScheme.primary.copy(alpha = if (pressed) 1f else 0.92f)
+    } else {
+        Color.White.copy(alpha = if (pressed) 0.75f else 0.55f)
+    }
     val fg = if (primary) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
     Box(
         modifier = modifier
+            .scale(scale)
             .shadow(6.dp, shape, spotColor = Color.Black.copy(alpha = 0.16f))
             .clip(shape)
             .background(bg)
             .border(1.dp, Color.White.copy(alpha = 0.7f), shape)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -396,12 +423,16 @@ private fun GlassIconButton(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(16.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, label = "btnScale")
     Box(
         modifier = modifier
+            .scale(scale)
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.5f))
+            .background(Color.White.copy(alpha = if (pressed) 0.7f else 0.5f))
             .border(1.dp, Color.White.copy(alpha = 0.7f), shape)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {

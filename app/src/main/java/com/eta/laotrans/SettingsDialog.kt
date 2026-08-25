@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -19,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +42,41 @@ import top.yukonga.miuix.kmp.basic.TextField
  */
 @Composable
 internal fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved: () -> Unit) {
+    if (show) {
+        Dialog(onDismissRequest = onDismiss) {
+            Card(Modifier.fillMaxWidth()) {
+                SettingsBody(onBack = onDismiss, onSaved = onSaved)
+            }
+        }
+    }
+}
+
+/**
+ * 整页设置面板（作为底部栏 tab 内容）。
+ */
+@Composable
+internal fun SettingsPanel(onBack: () -> Unit, onSaved: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+            .padding(bottom = 110.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(text = "‹ 返回", onClick = onBack)
+            Spacer(Modifier.width(8.dp))
+            Text("大模型设置", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+        Spacer(Modifier.height(12.dp))
+        Card(Modifier.fillMaxWidth()) {
+            SettingsBody(onBack = onBack, onSaved = onSaved)
+        }
+    }
+}
+
+@Composable
+private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     var baseUrl by remember { mutableStateOf(Config.baseUrl(context)) }
     var apiKey by remember { mutableStateOf(Config.apiKey(context)) }
@@ -61,84 +99,78 @@ internal fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved
 
     val candidates = if (availableModels.isNotEmpty()) availableModels else fallbackModels
 
-    if (show) {
-        Dialog(onDismissRequest = onDismiss) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(context.getString(R.string.settings_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
-                    TextField(value = baseUrl, onValueChange = { baseUrl = it }, label = context.getString(R.string.settings_base_url), useLabelAsPlaceholder = true)
-                    TextField(value = apiKey, onValueChange = { apiKey = it }, label = context.getString(R.string.settings_api_key), useLabelAsPlaceholder = true)
-                    TextField(value = model, onValueChange = { model = it }, label = context.getString(R.string.settings_model), useLabelAsPlaceholder = true)
+    Column(Modifier.padding(20.dp)) {
+        Text(context.getString(R.string.settings_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
+        TextField(value = baseUrl, onValueChange = { baseUrl = it }, label = context.getString(R.string.settings_base_url), useLabelAsPlaceholder = true)
+        TextField(value = apiKey, onValueChange = { apiKey = it }, label = context.getString(R.string.settings_api_key), useLabelAsPlaceholder = true)
+        TextField(value = model, onValueChange = { model = it }, label = context.getString(R.string.settings_model), useLabelAsPlaceholder = true)
 
-                    // 模型下拉：点击展开可用模型列表，列表可滚动，点选回填
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 4.dp)
-                            .clickable { modelMenuExpanded = !modelMenuExpanded },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (modelsLoading) "模型加载中…" else "可用模型（${candidates.size}）",
-                            fontSize = 13.sp,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = if (modelMenuExpanded) "收起 ▴" else "展开 ▾",
-                            fontSize = 13.sp
-                        )
-                    }
+        // 模型下拉：点击展开可用模型列表，列表可滚动，点选回填
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 4.dp)
+                .clickable { modelMenuExpanded = !modelMenuExpanded },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (modelsLoading) "模型加载中…" else "可用模型（${candidates.size}）",
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (modelMenuExpanded) "收起 ▴" else "展开 ▾",
+                fontSize = 13.sp
+            )
+        }
 
-                    if (modelMenuExpanded) {
-                        Card(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                            Column(
+        if (modelMenuExpanded) {
+            Card(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 6.dp)
+                ) {
+                    if (modelsLoading) {
+                        Text("加载中…", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+                    } else if (candidates.isEmpty()) {
+                        Text("未获取到模型，请手动输入模型名", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+                    } else {
+                        candidates.forEach { cand ->
+                            Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 300.dp)
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(vertical = 6.dp)
+                                    .clickable { model = cand; modelMenuExpanded = false }
+                                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (modelsLoading) {
-                                    Text("加载中…", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
-                                } else if (candidates.isEmpty()) {
-                                    Text("未获取到模型，请手动输入模型名", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
-                                } else {
-                                    candidates.forEach { cand ->
-                                        Row(
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .clickable { model = cand; modelMenuExpanded = false }
-                                                .padding(horizontal = 18.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = cand,
-                                                fontSize = 15.sp,
-                                                fontWeight = if (model == cand) FontWeight.Bold else FontWeight.Normal,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            if (model == cand) Text("✓", fontSize = 15.sp)
-                                        }
-                                    }
-                                }
+                                Text(
+                                    text = cand,
+                                    fontSize = 15.sp,
+                                    fontWeight = if (model == cand) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (model == cand) Text("✓", fontSize = 15.sp)
                             }
                         }
                     }
-
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(text = context.getString(R.string.settings_cancel), onClick = onDismiss)
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            text = context.getString(R.string.settings_save),
-                            onClick = {
-                                Config.save(context, baseUrl, apiKey, model, locale)
-                                onSaved()
-                            },
-                            colors = ButtonDefaults.textButtonColorsPrimary()
-                        )
-                    }
                 }
             }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(text = context.getString(R.string.settings_cancel), onClick = onBack)
+            Spacer(Modifier.width(8.dp))
+            TextButton(
+                text = context.getString(R.string.settings_save),
+                onClick = {
+                    Config.save(context, baseUrl, apiKey, model, locale)
+                    onSaved()
+                },
+                colors = ButtonDefaults.textButtonColorsPrimary()
+            )
         }
     }
 }
