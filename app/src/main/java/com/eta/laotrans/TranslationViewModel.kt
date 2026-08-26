@@ -169,6 +169,11 @@ class TranslationViewModel : ViewModel() {
     /**
      * 翻译。自动防抖由 UI 的 LaunchedEffect 控制；
      * 此处使用 jobToken + 任务取消避免「过期请求覆盖最新结果」的竞态。
+     *
+     * 引擎选择（Config.translateMode）：
+     * - [TranslateMode.FREE_ONLY]：只用 MyMemory 免费翻译，无需大模型配置；
+     * - [TranslateMode.LLM_ONLY]：只用大模型（未配置时提示并引导打开设置）；
+     * - [TranslateMode.AUTO]（默认）：先试免费翻译，失败再降级到大模型。
      */
     fun translate(context: Context, manual: Boolean) {
         val text = input.trim()
@@ -176,7 +181,9 @@ class TranslationViewModel : ViewModel() {
             if (manual) Toast.makeText(context, ctx(context, R.string.toast_input_empty), Toast.LENGTH_SHORT).show()
             return
         }
-        if (!Config.isConfigured(context)) {
+        val mode = Config.translateMode(context)
+        // 仅「仅大模型」模式要求先配置好 API Key/模型；免费与自动模式无配置也能先走免费翻译
+        if (mode == TranslateMode.LLM_ONLY && !Config.isConfigured(context)) {
             status = ctx(context, R.string.hint_need_config)
             if (manual) showSettings = true
             return
@@ -189,10 +196,25 @@ class TranslationViewModel : ViewModel() {
         translateJob = viewModelScope.launch {
             val full = StringBuilder()
             try {
-                val res = TranslateEngine.translateStream(context, text, src, tgt) { delta ->
-                    full.append(delta)
-                    if (myToken == jobToken) {
-                        withContext(Dispatchers.Main) { result = full.toString() }
+                val res: String = when (mode) {
+                    TranslateMode.FREE_ONLY -> TranslateEngine.translateFree(context, text, src, tgt)
+                        ?: throw IllegalStateException("免费翻译失败（无网络或已达免费额度），请切换「自动」或「仅大模型」模式")
+
+                    TranslateMode.LLM_ONLY -> translateWithLlm(context, text, src, tgt, myToken, full)
+
+                    TranslateMode.AUTO -> {
+                        val free = TranslateEngine.translateFree(context, text, src, tgt)
+                        if (free != null) {
+                            free
+                        } else {
+                            // 免费失败：降级大模型；未配置时提示并引导打开设置
+                            if (!Config.isConfigured(context)) {
+                                status = ctx(context, R.string.hint_need_config)
+                                if (manual) showSettings = true
+                                return@launch
+                            }
+                            translateWithLlm(context, text, src, tgt, myToken, full)
+                        }
                     }
                 }
                 // 若翻译期间文本已变化（新任务启动），丢弃过期结果
@@ -211,6 +233,21 @@ class TranslationViewModel : ViewModel() {
                 if (!manual && text != input.trim()) return@launch
                 status = ctx(context, R.string.status_failed_with, e.message ?: "")
             }
+        }
+    }
+
+    /** 大模型流式翻译：边生成边通过 onDelta 更新 [result]。 */
+    private suspend fun translateWithLlm(
+        context: Context,
+        text: String,
+        src: String,
+        tgt: String,
+        token: Int,
+        full: StringBuilder
+    ): String = TranslateEngine.translateStream(context, text, src, tgt) { delta ->
+        full.append(delta)
+        if (token == jobToken) {
+            withContext(Dispatchers.Main) { result = full.toString() }
         }
     }
 

@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * 运行时配置：接口地址、API Key、模型名、界面语言。
+ * 运行时配置：接口地址、API Key、模型名、界面语言、翻译引擎模式。
  * 由 App 内的设置界面填写，持久化到 SharedPreferences，
  * 这样换任何大模型服务都不用重新打包。
  */
@@ -15,6 +15,7 @@ object Config {
     private const val KEY_API_KEY = "api_key"
     private const val KEY_MODEL = "model"
     private const val KEY_LOCALE = "locale"
+    private const val KEY_TRANSLATE_MODE = "translate_mode"
 
     // 默认值：b.ai
     fun defaultBaseUrl() = "https://api.b.ai/v1"
@@ -32,6 +33,16 @@ object Config {
     /** 界面语言："zh" = 中文（默认），"lo" = 老挝文 */
     fun locale(c: Context): String = sp(c).getString(KEY_LOCALE, "zh") ?: "zh"
 
+    /**
+     * 翻译引擎模式：默认 [TranslateMode.AUTO]（免费优先，失败降级 LLM）。
+     * 读取异常时回退到默认值，保证不崩溃。
+     */
+    fun translateMode(c: Context): TranslateMode {
+        val raw = sp(c).getString(KEY_TRANSLATE_MODE, TranslateMode.AUTO.name)
+            ?: TranslateMode.AUTO.name
+        return runCatching { TranslateMode.valueOf(raw) }.getOrDefault(TranslateMode.AUTO)
+    }
+
     fun save(c: Context, baseUrl: String, apiKey: String, model: String, locale: String = "zh") {
         sp(c).edit()
             .putString(KEY_BASE_URL, baseUrl.trim())
@@ -39,6 +50,11 @@ object Config {
             .putString(KEY_MODEL, model.trim())
             .putString(KEY_LOCALE, locale)
             .apply()
+    }
+
+    /** 单独持久化翻译引擎模式。 */
+    fun saveTranslateMode(c: Context, mode: TranslateMode) {
+        sp(c).edit().putString(KEY_TRANSLATE_MODE, mode.name).apply()
     }
 
     /**

@@ -14,7 +14,19 @@ import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 
 /**
- * 翻译引擎（大模型 LLM，OpenAI 兼容接口）。
+ * 翻译引擎模式选择。
+ */
+enum class TranslateMode {
+    /** 自动：优先免费翻译（MyMemory），失败时降级到大模型 LLM。 */
+    AUTO,
+    /** 仅免费：只用 MyMemory 免费翻译，不依赖大模型配置。 */
+    FREE_ONLY,
+    /** 仅大模型：只用 LLM（需配置 API Key / 模型名）。 */
+    LLM_ONLY,
+}
+
+/**
+ * 翻译引擎（大模型 LLM，OpenAI 兼容接口 + MyMemory 免费翻译）。
  *
  * 所有配置（接口地址 / API Key / 模型名）在 App 内的设置界面里填，通过 [Config] 持久化。
  *
@@ -246,6 +258,31 @@ object TranslateEngine {
      */
     fun autoDetect(text: String): Pair<String, String> =
         if (containsLao(text)) "lo" to "zh" else "zh" to "lo"
+
+    // ====== 免费翻译（MyMemory） ======
+
+    /**
+     * 免费翻译（MyMemory 后端）：先查双层缓存，未命中时调用 [MyMemoryTranslate]，
+     * 成功后写回缓存。失败（无网络/超时/超配额）返回 null，由调用方决定降级策略。
+     *
+     * @param context 上下文（用于缓存 I/O）
+     * @param text    待翻译文本
+     * @param source  源语言代码（"zh" / "lo"）
+     * @param target  目标语言代码（"zh" / "lo"）
+     * @return 译文文本，失败返回 null
+     */
+    suspend fun translateFree(
+        context: Context,
+        text: String,
+        source: String,
+        target: String
+    ): String? = withContext(Dispatchers.IO) {
+        val key = cacheKey(source, target, text)
+        cacheGet(context, key)?.let { return@withContext it }
+        val translated = MyMemoryTranslate.translate(text, source, target)
+        if (translated != null) cachePut(context, key, translated)
+        translated
+    }
 
     /**
      * 流式翻译：SSE 边生成边回调。onDelta 在后台线程被调用；

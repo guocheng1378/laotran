@@ -37,7 +37,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 
 /**
- * 大模型设置对话框：接口地址 / API Key / 模型名。
+ * 设置对话框：接口地址 / API Key / 模型名 / 翻译引擎。
  * 模型支持下拉选择（从 GET /models 拉取真实可用模型），列表可滚动，也可手动输入。
  * 保存后写入 SharedPreferences（Config）。
  * 另含「音频管理」区块：展示音频库数量并提供清空按钮（AudioHistoryStore.clear）。
@@ -84,6 +84,7 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     var apiKey by remember { mutableStateOf(Config.apiKey(context)) }
     var model by remember { mutableStateOf(Config.model(context)) }
     var locale by remember { mutableStateOf(Config.locale(context)) }
+    var translateMode by remember { mutableStateOf(Config.translateMode(context)) }
     var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var modelsLoading by remember { mutableStateOf(false) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
@@ -162,6 +163,34 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
             }
         }
 
+        // ====== 翻译引擎 ======
+        Spacer(Modifier.height(20.dp))
+        Text("翻译引擎", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        Text(
+            "自动：优先免费翻译，失败自动降级大模型；仅免费：只用 MyMemory 免费翻译（无需 API Key）；仅大模型：只用大模型（需 API Key）。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        TranslateMode.values().forEach { mode ->
+            val selected = translateMode == mode
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { translateMode = mode }
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = translateModeLabel(mode),
+                    fontSize = 15.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.weight(1f)
+                )
+                if (selected) Text("✓", fontSize = 15.sp)
+            }
+        }
+
         // ====== 音频管理 ======
         Spacer(Modifier.height(20.dp))
         Text("音频管理", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
@@ -199,12 +228,20 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 text = context.getString(R.string.settings_save),
                 onClick = {
                     Config.save(context, baseUrl, apiKey, model, locale)
+                    Config.saveTranslateMode(context, translateMode)
                     onSaved()
                 },
                 colors = ButtonDefaults.textButtonColorsPrimary()
             )
         }
     }
+}
+
+/** 翻译引擎选项的展示文案。 */
+private fun translateModeLabel(mode: TranslateMode): String = when (mode) {
+    TranslateMode.AUTO -> "自动（免费优先）"
+    TranslateMode.FREE_ONLY -> "仅免费"
+    TranslateMode.LLM_ONLY -> "仅大模型"
 }
 
 /** 内置常用模型（作为从服务端拉取失败时的回退候选） */
