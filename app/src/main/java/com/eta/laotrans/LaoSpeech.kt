@@ -115,7 +115,7 @@ object LaoSpeech {
     }
 
     /** 查本地缓存：先内存再持久化；命中返回文件路径，文件丢失则清理对应记录。 */
-    private fun resolveCache(text: String, context: Context): String? {
+    fun resolveCache(text: String, context: Context): String? {
         memCache[text]?.let { path ->
             if (File(path).exists()) return path
             memCache.remove(text)
@@ -128,6 +128,10 @@ object LaoSpeech {
         AudioHistoryStore.removeByPath(context, rec.filePath)
         return null
     }
+
+    /** 该文本是否已存在本地缓存的音频文件（供历史面板显示「已存音频」标记）。 */
+    fun hasCachedAudio(context: Context, text: String): Boolean =
+        !text.isNullOrBlank() && resolveCache(text, context) != null
 
     /** 提交 Gradio 队列合成并轮询，返回 wav 下载 url（失败返回 null）。 */
     private fun synthesize(text: String): String? {

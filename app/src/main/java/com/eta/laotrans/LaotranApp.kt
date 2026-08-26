@@ -169,7 +169,9 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
                 onPick = { r ->
                     vm.input = r.srcText
                     selectedTab = 0
-                }
+                },
+                // 有已存音频时，点击「音频库」→ 切到音频库 tab
+                onGotoAudio = { selectedTab = 2 }
             )
             2 -> AudioHistoryPanel(onBack = { selectedTab = 0 })
             3 -> SettingsPanel(onBack = { selectedTab = 0 }, onSaved = { selectedTab = 0 })
