@@ -62,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -476,8 +477,7 @@ private fun BottomNavBar(
         // 4 个 tab：翻译 / 历史 / 音频库 / 设置
         BottomNavItem("翻译", MiuixIcons.Translate, selectedTab == 0, { onSelect(0) }, Modifier.weight(1f))
         BottomNavItem("历史", MiuixIcons.Refresh, selectedTab == 1, { onSelect(1) }, Modifier.weight(1f))
-        // 音频库：无内置图标（避免依赖未验证的扩展图标），纯文字展示，保持玻璃风格
-        BottomNavItem("音频库", null, selectedTab == 2, { onSelect(2) }, Modifier.weight(1f))
+                BottomNavItem("音频库", MiuixIcons.Music, selectedTab == 2, { onSelect(2) }, Modifier.weight(1f))
         BottomNavItem("设置", MiuixIcons.Settings, selectedTab == 3, { onSelect(3) }, Modifier.weight(1f))
     }
 }
