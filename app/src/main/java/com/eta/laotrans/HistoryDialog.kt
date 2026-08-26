@@ -1,5 +1,6 @@
 package com.eta.laotrans
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,9 +32,10 @@ import top.yukonga.miuix.kmp.basic.TextButton
 
 /**
  * 整页历史面板（作为底部栏 tab 内容）：展示历史记录，支持播放与删除。
+ * 传入 [onPick] 后，点击某条记录会把其原文回填到输入框（由调用方处理跳转）。
  */
 @Composable
-internal fun HistoryPanel(onBack: () -> Unit) {
+internal fun HistoryPanel(onBack: () -> Unit, onPick: ((HistoryRecord) -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var records by remember { mutableStateOf(HistoryStore.list(context)) }
@@ -59,9 +61,17 @@ internal fun HistoryPanel(onBack: () -> Unit) {
         } else {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 records.forEach { r ->
-                    Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Card(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                            .then(if (onPick != null) Modifier.clickable { onPick(r) } else Modifier)
+                    ) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(r.direction, fontSize = 11.sp)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(r.direction, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                                if (onPick != null) Text("点击回填", fontSize = 11.sp, color = Color.Gray)
+                            }
                             Text(r.srcText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
                             Text(r.dstText, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

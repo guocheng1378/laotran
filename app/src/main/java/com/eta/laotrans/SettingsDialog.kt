@@ -1,5 +1,6 @@
 package com.eta.laotrans
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import top.yukonga.miuix.kmp.basic.TextField
  * 大模型设置对话框：接口地址 / API Key / 模型名。
  * 模型支持下拉选择（从 GET /models 拉取真实可用模型），列表可滚动，也可手动输入。
  * 保存后写入 SharedPreferences（Config）。
+ * 另含「音频管理」区块：展示音频库数量并提供清空按钮（AudioHistoryStore.clear）。
  */
 @Composable
 internal fun SettingsDialogContent(show: Boolean, onDismiss: () -> Unit, onSaved: () -> Unit) {
@@ -66,7 +68,7 @@ internal fun SettingsPanel(onBack: () -> Unit, onSaved: () -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(text = "‹ 返回", onClick = onBack)
             Spacer(Modifier.width(8.dp))
-            Text("大模型设置", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("设置", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
         Spacer(Modifier.height(12.dp))
         Card(Modifier.fillMaxWidth()) {
@@ -160,6 +162,36 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
             }
         }
 
+        // ====== 音频管理 ======
+        Spacer(Modifier.height(20.dp))
+        Text("音频管理", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        val audioCount = AudioHistoryStore.list(context).size
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "已保存音频：$audioCount 条",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Text(
+                    "翻译页朗读老挝语译文后，音频会保存在音频库中，可在「音频库」tab 回放或删除。",
+                    fontSize = 12.sp,
+                    color = Color.Gray.copy(alpha = 0.8f)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            TextButton(
+                text = "清空音频库",
+                onClick = {
+                    AudioHistoryStore.clear(context)
+                    Toast.makeText(context, "音频库已清空", Toast.LENGTH_SHORT).show()
+                },
+                colors = ButtonDefaults.textButtonColorsPrimary()
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(text = context.getString(R.string.settings_cancel), onClick = onBack)
             Spacer(Modifier.width(8.dp))

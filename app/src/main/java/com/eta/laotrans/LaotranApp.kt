@@ -153,6 +153,7 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
         vm.translate(context, false)
     }
 
+    // 底栏 tab：0=翻译 1=历史 2=音频库 3=设置
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Box(Modifier.fillMaxSize()) {
@@ -161,13 +162,21 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
 
         // ====== 主内容（随底栏 tab 切换） ======
         when (selectedTab) {
-            1 -> HistoryPanel(onBack = { selectedTab = 0 })
-            2 -> SettingsPanel(onBack = { selectedTab = 0 }, onSaved = { selectedTab = 0 })
+            1 -> HistoryPanel(
+                onBack = { selectedTab = 0 },
+                // 点击历史记录 → 回填输入框并切回翻译页（防抖自动翻译）
+                onPick = { r ->
+                    vm.input = r.srcText
+                    selectedTab = 0
+                }
+            )
+            2 -> AudioHistoryPanel(onBack = { selectedTab = 0 })
+            3 -> SettingsPanel(onBack = { selectedTab = 0 }, onSaved = { selectedTab = 0 })
             else -> TranslateContent(
                 vm = vm,
                 context = context,
                 startVoice = ::startVoice,
-                onOpenSettings = { selectedTab = 2 },
+                onOpenSettings = { selectedTab = 3 },
             )
         }
 
@@ -255,7 +264,7 @@ private fun TranslateContent(
         )
         Spacer(Modifier.height(16.dp))
 
-        // ====== 译文结果卡（标题与内容左对齐） ======
+        // ====== 译文结果卡（标题与内容左对齐，含复制/收藏/分享） ======
         GlassCard {
             Text(
                 context.getString(R.string.result_label),
@@ -266,13 +275,43 @@ private fun TranslateContent(
             Text(vm.result.ifEmpty { context.getString(R.string.result_empty) }, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 10.dp))
             Text(vm.status, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(top = 8.dp))
             if (vm.result.isNotEmpty()) {
+                // 收藏/分享所用的原文：优先用最近一次翻译的原文，其次用当前输入
+                val favText = vm.lastTranslated.ifEmpty { vm.input.trim() }
                 val clipboard = LocalClipboardManager.current
-                GlassButton(
-                    text = "复制",
-                    onClick = { clipboard.setText(AnnotatedString(vm.result)) },
-                    modifier = Modifier.padding(top = 12.dp),
-                    primary = true,
-                )
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassButton(
+                        text = "复制",
+                        onClick = { clipboard.setText(AnnotatedString(vm.result)) },
+                        modifier = Modifier.weight(1f),
+                        primary = true,
+                    )
+                    GlassButton(
+                        text = "收藏",
+                        onClick = {
+                            if (favText.isNotEmpty()) {
+                                TranslateEngine.favoriteTranslation(context, favText, vm.result)
+                                Toast.makeText(context, "已收藏", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlassButton(
+                        text = "分享",
+                        onClick = {
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.app_name))
+                                putExtra(Intent.EXTRA_TEXT, "原文：$favText\n译文：${vm.result}")
+                            }
+                            runCatching {
+                                context.startActivity(Intent.createChooser(share, "分享译文"))
+                            }.onFailure {
+                                Toast.makeText(context, "没有可用的分享应用", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -434,16 +473,19 @@ private fun BottomNavBar(
             .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(28.dp))
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
+        // 4 个 tab：翻译 / 历史 / 音频库 / 设置
         BottomNavItem("翻译", MiuixIcons.Translate, selectedTab == 0, { onSelect(0) }, Modifier.weight(1f))
         BottomNavItem("历史", MiuixIcons.Refresh, selectedTab == 1, { onSelect(1) }, Modifier.weight(1f))
-        BottomNavItem("设置", MiuixIcons.Settings, selectedTab == 2, { onSelect(2) }, Modifier.weight(1f))
+        // 音频库：无内置图标（避免依赖未验证的扩展图标），纯文字展示，保持玻璃风格
+        BottomNavItem("音频库", null, selectedTab == 2, { onSelect(2) }, Modifier.weight(1f))
+        BottomNavItem("设置", MiuixIcons.Settings, selectedTab == 3, { onSelect(3) }, Modifier.weight(1f))
     }
 }
 
 @Composable
 private fun BottomNavItem(
     label: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -462,7 +504,11 @@ private fun BottomNavItem(
             .padding(vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = label, tint = fg)
-        Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 3.dp))
+        if (icon != null) {
+            Icon(icon, contentDescription = label, tint = fg)
+            Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 3.dp))
+        } else {
+            Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(vertical = 8.dp))
+        }
     }
 }

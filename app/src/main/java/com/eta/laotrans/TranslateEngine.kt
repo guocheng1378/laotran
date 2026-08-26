@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.LinkedHashMap
 import java.util.concurrent.TimeUnit
 
@@ -22,7 +23,9 @@ import java.util.concurrent.TimeUnit
  * 翻译成中文时输出两行：中文译文 + 「拼音：<汉语拼音>」。
  * 支持 [translateStream] 流式翻译：边生成边通过 onDelta 回调显示。
  *
- * 内置 LRU 翻译缓存：相同来源/目标/文本会直接命中缓存，跳过 LLM 请求，显著提速。
+ * 双层翻译缓存：内存 LRU 缓存 + 磁盘文件缓存（filesDir/translate_cache.json）。
+ * 相同来源/目标/文本直接命中缓存、跳过 LLM 请求；App 重启后磁盘缓存依然生效。
+ * 另提供收藏功能，持久化到 filesDir/favorites.json。
  */
 object TranslateEngine {
 
@@ -42,20 +45,191 @@ object TranslateEngine {
         .callTimeout(180, TimeUnit.SECONDS)
         .build()
 
-    // ====== 翻译缓存（LRU） ======
+    // ====== 翻译缓存（内存 LRU + 磁盘持久化） ======
 
-    private const val CACHE_MAX = 64
+    private const val CACHE_MAX = 64 // 内存 LRU 上限
+    private const val FILE_CACHE_MAX = 512 // 磁盘缓存上限
+    private const val FILE_CACHE_NAME = "translate_cache.json"
+
+    /** 内存 LRU 缓存：热路径快速命中。 */
     private val cache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > CACHE_MAX
     }
 
+    /** 磁盘缓存的加载副本（Key = [cacheKey]，Value = 译文）。 */
+    private val fileCache = LinkedHashMap<String, String>()
+    private var fileCacheLoaded = false
+    private val cacheLock = Any()
+
     private fun cacheKey(source: String, target: String, text: String) = "$source|$target|$text"
 
-    private fun cacheGet(key: String): String? = synchronized(cache) { cache[key] }
+    private fun cacheFile(context: Context) = File(context.filesDir, FILE_CACHE_NAME)
 
-    private fun cachePut(key: String, value: String) {
+    /** 懒加载磁盘缓存（幂等，仅首次真正读盘）。 */
+    private fun loadFileCache(context: Context) {
+        synchronized(cacheLock) {
+            if (fileCacheLoaded) return
+            fileCacheLoaded = true
+            try {
+                val f = cacheFile(context)
+                if (!f.exists()) return
+                val obj = JSONObject(f.readText())
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    val v = obj.optString(k)
+                    if (v.isNotEmpty()) fileCache[k] = v
+                }
+            } catch (_: Exception) {
+                // 缓存文件损坏/不可读时忽略，不影响翻译功能
+            }
+        }
+    }
+
+    /** 把磁盘缓存写回 translate_cache.json。 */
+    private fun saveFileCache(context: Context) {
+        synchronized(cacheLock) {
+            try {
+                val obj = JSONObject()
+                for ((k, v) in fileCache) obj.put(k, v)
+                val f = cacheFile(context)
+                f.parentFile?.mkdirs()
+                f.writeText(obj.toString())
+            } catch (_: Exception) {
+                // 写失败时忽略，仅丢失本次缓存
+            }
+        }
+    }
+
+    private fun cacheGetMem(key: String): String? = synchronized(cache) { cache[key] }
+
+    private fun cachePutMem(key: String, value: String) {
         if (value.isBlank()) return
         synchronized(cache) { cache[key] = value }
+    }
+
+    /** 双层缓存读：先内存，后磁盘；磁盘命中会自动提升到内存。 */
+    private fun cacheGet(context: Context, key: String): String? {
+        cacheGetMem(key)?.let { return it }
+        loadFileCache(context)
+        synchronized(cacheLock) {
+            val v = fileCache[key]
+            if (v != null) cachePutMem(key, v)
+            return v
+        }
+    }
+
+    /** 双层缓存写：同时写入内存与磁盘。 */
+    private fun cachePut(context: Context, key: String, value: String) {
+        if (value.isBlank()) return
+        cachePutMem(key, value)
+        loadFileCache(context)
+        synchronized(cacheLock) {
+            fileCache[key] = value
+            while (fileCache.size > FILE_CACHE_MAX) {
+                val it = fileCache.keys.iterator()
+                if (!it.hasNext()) break
+                it.next()
+                it.remove()
+            }
+            saveFileCache(context)
+        }
+    }
+
+    /** 清空内存与磁盘翻译缓存。 */
+    fun clearCache(context: Context) {
+        synchronized(cache) { cache.clear() }
+        synchronized(cacheLock) {
+            fileCache.clear()
+            try {
+                val f = cacheFile(context)
+                if (f.exists()) f.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // ====== 收藏 ======
+
+    private const val FAVORITES_NAME = "favorites.json"
+    private val favoritesLock = Any()
+
+    /** 一条收藏：原文 [text] + 译文 [result] + 收藏时间 [time]。 */
+    data class FavoriteEntry(val text: String, val result: String, val time: Long)
+
+    private fun favoritesFile(context: Context) = File(context.filesDir, FAVORITES_NAME)
+
+    /** 新增/更新收藏（按原文去重，命中则刷新时间）。 */
+    fun favoriteTranslation(context: Context, text: String, result: String) {
+        if (text.isBlank() || result.isBlank()) return
+        synchronized(favoritesLock) {
+            val list = loadFavorites(context).toMutableList()
+            list.removeAll { it.text == text }
+            list.add(0, FavoriteEntry(text, result, System.currentTimeMillis()))
+            saveFavorites(context, list)
+        }
+    }
+
+    /** 读取全部收藏（新收藏在前）。 */
+    fun getFavorites(context: Context): List<FavoriteEntry> = synchronized(favoritesLock) {
+        loadFavorites(context)
+    }
+
+    /** 删除指定原文的收藏。 */
+    fun removeFavorite(context: Context, text: String) {
+        synchronized(favoritesLock) {
+            val list = loadFavorites(context).toMutableList()
+            list.removeAll { it.text == text }
+            saveFavorites(context, list)
+        }
+    }
+
+    /** 清空全部收藏。 */
+    fun clearFavorites(context: Context) {
+        synchronized(favoritesLock) {
+            try {
+                val f = favoritesFile(context)
+                if (f.exists()) f.delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** 读取收藏文件（调用方需已持有 [favoritesLock]）。 */
+    private fun loadFavorites(context: Context): List<FavoriteEntry> {
+        try {
+            val f = favoritesFile(context)
+            if (!f.exists()) return emptyList()
+            val arr = JSONArray(f.readText())
+            val out = mutableListOf<FavoriteEntry>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val text = o.optString("text", "")
+                if (text.isBlank()) continue
+                out.add(FavoriteEntry(text, o.optString("result", ""), o.optLong("time", 0L)))
+            }
+            return out
+        } catch (_: Exception) {
+            return emptyList()
+        }
+    }
+
+    /** 写入收藏文件（调用方需已持有 [favoritesLock]）。 */
+    private fun saveFavorites(context: Context, list: List<FavoriteEntry>) {
+        try {
+            val arr = JSONArray()
+            for (e in list) {
+                arr.put(JSONObject()
+                    .put("text", e.text)
+                    .put("result", e.result)
+                    .put("time", e.time))
+            }
+            val f = favoritesFile(context)
+            f.parentFile?.mkdirs()
+            f.writeText(arr.toString())
+        } catch (_: Exception) {
+            // 写失败忽略
+        }
     }
 
     // ====== 语言检测 ======
@@ -85,8 +259,8 @@ object TranslateEngine {
         onDelta: suspend (String) -> Unit
     ): String = withContext(Dispatchers.IO) {
         val key = cacheKey(source, target, text)
-        cacheGet(key)?.let { cached ->
-            // 命中缓存：直接回调完整结果，跳过 LLM 请求
+        cacheGet(context, key)?.let { cached ->
+            // 命中缓存（内存或磁盘）：直接回调完整结果，跳过 LLM 请求
             onDelta(cached)
             return@withContext cached
         }
@@ -148,7 +322,7 @@ object TranslateEngine {
             }
         }
         val result = full.toString().trim()
-        cachePut(key, result)
+        cachePut(context, key, result)
         result
     }
 
