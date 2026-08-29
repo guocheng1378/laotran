@@ -116,6 +116,7 @@ internal fun AudioHistoryPanel(onBack: () -> Unit) {
                                     text = "删除",
                                     onClick = {
                                         LaoSpeech.deleteAudio(context, a.path)
+                                        HistoryStore.clearAudioPath(context, a.path)
                                         audios = LaoSpeech.getSavedAudioList(context)
                                     }
                                 )

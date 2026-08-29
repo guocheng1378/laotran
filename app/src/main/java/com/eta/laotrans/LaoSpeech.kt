@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.media.PlaybackParams
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -117,6 +118,7 @@ object LaoSpeech {
                 wavFile.absolutePath
             } catch (e: Exception) {
                 e.printStackTrace()
+                speakViaSystemTts(trimmed, context)
                 null
             }
         }
@@ -231,6 +233,29 @@ object LaoSpeech {
     }
 
     /** 回放本地 wav 文件（供音频库面板回放）。 */
+    /**
+     * 系统 TTS 兜底：Gradio 在线合成失败时，尝试用系统 TextToSpeech 朗读老挝语（best-effort）。
+     * 多数设备未安装老挝语音数据，此时会静默失败，不影响主流程。
+     */
+    private fun speakViaSystemTts(text: String, context: Context) {
+        try {
+            var tts: TextToSpeech? = null
+            tts = TextToSpeech(context.applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    val res = tts?.setLanguage(Locale("lo"))
+                    if (res != TextToSpeech.LANG_MISSING_DATA && res != TextToSpeech.LANG_NOT_SUPPORTED) {
+                        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "lao_tts_fallback")
+                    }
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                        { runCatching { tts?.shutdown() } }, 6000
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun playFile(path: String, speed: Float = 1.0f) {
         if (path.isBlank() || !File(path).exists()) return
         Handler(Looper.getMainLooper()).post { playOnMain(path, speed) }

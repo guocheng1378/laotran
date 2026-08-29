@@ -73,6 +73,20 @@ object HistoryStore {
         sp(c).edit().remove(KEY).apply()
     }
 
+    /** 解除所有历史记录对指定音频文件的关联（音频被删除时同步清理引用）。 */
+    fun clearAudioPath(c: Context, path: String) {
+        if (path.isBlank()) return
+        val list = list(c).toMutableList()
+        var changed = false
+        for (i in list.indices) {
+            if (list[i].audioPath == path) {
+                list[i] = list[i].copy(audioPath = "")
+                changed = true
+            }
+        }
+        if (changed) save(c, list)
+    }
+
     private fun save(c: Context, list: List<HistoryRecord>) {
         val arr = JSONArray()
         for (r in list) {

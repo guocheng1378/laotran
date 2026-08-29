@@ -111,6 +111,12 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
         Text(context.getString(R.string.settings_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         TextField(value = baseUrl, onValueChange = { baseUrl = it }, label = context.getString(R.string.settings_base_url), useLabelAsPlaceholder = true)
         TextField(value = apiKey, onValueChange = { apiKey = it }, label = context.getString(R.string.settings_api_key), useLabelAsPlaceholder = true)
+        Text(
+            "API Key 以明文保存在本机，请仅在可信设备使用；使用免费翻译引擎可留空。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+        )
         TextField(value = model, onValueChange = { model = it }, label = context.getString(R.string.settings_model), useLabelAsPlaceholder = true)
 
         // 模型下拉：点击展开可用模型列表，列表可滚动，点选回填

@@ -110,6 +110,10 @@ internal fun HistoryPanel(
                                     TextButton(text = "📂 音频库", onClick = { onGotoAudio() })
                                 }
                                 TextButton(text = "🗑 删除", onClick = {
+                                    r.audioPath.takeIf { it.isNotBlank() }?.let { p ->
+                                        val referenced = AudioHistoryStore.list(context).any { it.filePath == p }
+                                        if (!referenced) runCatching { java.io.File(p).delete() }
+                                    }
                                     HistoryStore.remove(context, r.id)
                                     records = HistoryStore.list(context)
                                 })

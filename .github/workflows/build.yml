@@ -41,14 +41,29 @@ jobs:
           fi
       - name: 编译 Release APK
         run: gradle assembleRelease --no-daemon --stacktrace
+      - name: 读取版本号并检查 tag 是否已发布
+        id: rel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/git/refs/tags/v$VER")
+          if [ "$CODE" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: 发布到 GitHub Release
+        if: steps.rel.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.9
-          name: LaoTran v1.9
+          tag_name: v${{ steps.rel.outputs.ver }}
+          name: LaoTran v${{ steps.rel.outputs.ver }}
           body: |
             自动构建发布版（固定签名，支持应用内覆盖更新）。
-            含免费翻译引擎 MyMemory、音频持久化、历史记录、4-tab UI。
+            含免费翻译引擎 MyMemory、音频持久化、历史记录、4-tab UI、应用内自动更新检测。
           files: app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
