@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.GlobalScope
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -93,15 +94,15 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     var modelsLoading by remember { mutableStateOf(false) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
 
-    // 展开模型下拉时，从服务端拉取可用模型列表（失败则回退到内置常用列表）
-    LaunchedEffect(modelMenuExpanded) {
-        if (modelMenuExpanded) {
-            modelsLoading = true
-            availableModels = withContext(Dispatchers.IO) {
-                runCatching { TranslateEngine.listModelsSync(baseUrl, apiKey) }.getOrDefault(emptyList())
-            }
-            modelsLoading = false
+    // 接口地址 / API Key 变化时（防抖）自动拉取可用模型列表；下拉展开时也会刷新
+    LaunchedEffect(baseUrl, apiKey, modelMenuExpanded) {
+        if (availableModels.isNotEmpty() && !modelMenuExpanded) return@LaunchedEffect
+        delay(500)
+        modelsLoading = true
+        availableModels = withContext(Dispatchers.IO) {
+            runCatching { TranslateEngine.listModelsSync(baseUrl, apiKey) }.getOrDefault(emptyList())
         }
+        modelsLoading = false
     }
 
     val candidates = if (availableModels.isNotEmpty()) availableModels else fallbackModels
@@ -120,11 +121,23 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 .clickable { modelMenuExpanded = !modelMenuExpanded },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (modelsLoading) "模型加载中…" else "可用模型（${candidates.size}）",
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f)
-            )
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (modelsLoading) "模型加载中…" else "可用模型（${candidates.size}）",
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(text = "刷新", onClick = {
+                    modelsLoading = true
+                    scope.launch(Dispatchers.IO) {
+                        val list = runCatching { TranslateEngine.listModelsSync(baseUrl, apiKey) }.getOrDefault(emptyList())
+                        withContext(Dispatchers.Main) {
+                            availableModels = list
+                            modelsLoading = false
+                        }
+                    }
+                })
+            }
             Text(
                 text = if (modelMenuExpanded) "收起 ▴" else "展开 ▾",
                 fontSize = 13.sp
@@ -163,6 +176,36 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // ====== 界面语言 ======
+        Spacer(Modifier.height(20.dp))
+        Text("界面语言", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        Text(
+            "切换后保存并重启界面以生效；老挝语界面需系统字体支持。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Row(Modifier.fillMaxWidth()) {
+            listOf("zh" to "中文", "lo" to "老挝语").forEach { (code, labelText) ->
+                val selected = locale == code
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clickable { locale = code }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = labelText,
+                        fontSize = 15.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (selected) Text("✓", fontSize = 15.sp)
                 }
             }
         }
@@ -267,6 +310,8 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                     Config.save(context, baseUrl, apiKey, model, locale)
                     Config.saveTranslateMode(context, translateMode)
                     onSaved()
+                    // 若界面语言有变化，重建 Activity 使新的 Locale 生效
+                    (context as? android.app.Activity)?.recreate()
                 },
                 colors = ButtonDefaults.textButtonColorsPrimary()
             )

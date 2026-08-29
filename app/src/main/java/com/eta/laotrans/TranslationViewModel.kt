@@ -124,12 +124,16 @@ class TranslationViewModel : ViewModel() {
             Toast.makeText(context, ctx(context, R.string.toast_speak_first), Toast.LENGTH_SHORT).show()
             return
         }
+        // 从译文中提取罗马音/拼音转写行，供音频库双语展示
+        val rom = full.lineSequence()
+            .firstOrNull { it.startsWith("转写：") || it.startsWith("拼音：") }
+            ?.substringAfter("：")?.trim() ?: ""
         speakJob?.cancel()
         speakJob = viewModelScope.launch {
             if (TranslateEngine.containsLao(body)) {
                 status = ctx(context, R.string.status_synth_lao)
-                val ok = LaoSpeech.speak(body, context, speakSpeed)
-                status = if (ok) ctx(context, R.string.status_speak_ok) else ctx(context, R.string.status_speak_fail)
+                val path = LaoSpeech.speak(body, context, speakSpeed, srcText = input.trim(), romanization = rom)
+                status = if (path != null) ctx(context, R.string.status_speak_ok) else ctx(context, R.string.status_speak_fail)
             } else {
                 status = ctx(context, R.string.status_synth_voice)
                 val ok = speakWithSystemTts(context, body)
@@ -221,11 +225,19 @@ class TranslationViewModel : ViewModel() {
                 if (myToken != jobToken) return@launch
                 lastTranslated = text
                 result = res
-                HistoryStore.add(context, text, res, ctx(context, R.string.dir_progress, label(context, src), label(context, tgt)))
+                val dirLabel = ctx(context, R.string.dir_progress, label(context, src), label(context, tgt))
                 if (tgt == "lo") {
                     status = ctx(context, R.string.status_done_speaking)
-                    speak(context)
+                    val body = res.substringBefore("转写：").substringBefore("拼音：").trim()
+                    val rom = res.lineSequence()
+                        .firstOrNull { it.startsWith("转写：") || it.startsWith("拼音：") }
+                        ?.substringAfter("：")?.trim() ?: ""
+                    // 合成老挝语语音并把音频路径关联进历史记录，便于历史面板直接回放/跳转音频库
+                    val audioPath = LaoSpeech.speak(body, context, speakSpeed, srcText = text, romanization = rom)
+                    HistoryStore.add(context, text, res, dirLabel, audioPath ?: "")
+                    status = if (audioPath != null) ctx(context, R.string.status_speak_ok) else ctx(context, R.string.status_speak_fail)
                 } else {
+                    HistoryStore.add(context, text, res, dirLabel, "")
                     status = ctx(context, R.string.status_done)
                 }
             } catch (e: Exception) {

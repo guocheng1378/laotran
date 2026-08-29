@@ -302,7 +302,7 @@ object TranslateEngine {
             return@withContext cached
         }
 
-        val baseUrl = Config.baseUrl(context)
+        val baseUrl = normalizeBaseUrl(Config.baseUrl(context))
         val keyToken = Config.apiKey(context)
         val model = Config.model(context)
         if (keyToken.isBlank()) throw IllegalStateException("请先在设置里填写 API Key（⚙️ 设置）")
@@ -320,7 +320,7 @@ object TranslateEngine {
             .put("temperature", 0.2)
 
         val req = Request.Builder()
-            .url(baseUrl.trimEnd('/') + "/chat/completions")
+            .url(baseUrl + "/chat/completions")
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .header("Authorization", "Bearer $keyToken")
             .build()
@@ -366,10 +366,18 @@ object TranslateEngine {
     // ====== 模型列表 ======
 
     /** 拉取服务端可用模型列表（OpenAI 兼容 GET /models）。失败返回空列表。 */
+    /** 规范化 baseUrl：OpenAI 兼容服务接口约定在 /v1 下；若用户未显式包含 /v1 则自动补上。 */
+    private fun normalizeBaseUrl(raw: String): String {
+        val u = raw.trim().trimEnd('/')
+        if (u.isEmpty() || u.endsWith("/v1")) return u
+        return if (Regex("/v\d").containsMatchIn(u)) u else "$u/v1"
+    }
+
     fun listModelsSync(baseUrl: String, apiKey: String): List<String> {
         if (baseUrl.isBlank()) return emptyList()
+        val url = normalizeBaseUrl(baseUrl) + "/models"
         val req = Request.Builder()
-            .url(baseUrl.trimEnd('/') + "/models")
+            .url(url)
             .header("Authorization", "Bearer $apiKey")
             .build()
         client.newCall(req).execute().use { resp ->
@@ -377,7 +385,11 @@ object TranslateEngine {
             val body = resp.body?.string() ?: return emptyList()
             val data = JSONObject(body).optJSONArray("data") ?: return emptyList()
             return (0 until data.length()).mapNotNull { i ->
-                data.optJSONObject(i)?.optString("id")?.takeIf { it.isNotBlank() }
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                // 兼容不同后端：优先 id，其次 name / model 字段
+                o.optString("id").takeIf { it.isNotBlank() }
+                    ?: o.optString("name").takeIf { it.isNotBlank() }
+                    ?: o.optString("model").takeIf { it.isNotBlank() }
             }.distinct()
         }
     }

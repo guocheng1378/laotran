@@ -44,8 +44,8 @@ jobs:
       - name: 发布到 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.8
-          name: LaoTran v1.8
+          tag_name: v1.9
+          name: LaoTran v1.9
           body: |
             自动构建发布版（固定签名，支持应用内覆盖更新）。
             含免费翻译引擎 MyMemory、音频持久化、历史记录、4-tab UI。

@@ -25,7 +25,9 @@ import org.json.JSONObject
 data class SavedAudio(
     val path: String,
     val text: String,
-    val time: Long
+    val time: Long,
+    val srcText: String = "",
+    val romanization: String = ""
 )
 
 /**
@@ -71,45 +73,51 @@ object LaoSpeech {
     /**
      * 合成老挝语音并播放。
      * 优先命中本地缓存（内存 -> AudioHistoryStore），未命中才在线合成并持久保存。
-     * 返回 true 表示已成功触发播放。
+     * 成功返回音频文件绝对路径，失败返回 null。
      */
-    suspend fun speak(text: String, context: Context, speed: Float = 1.0f): Boolean {
+    suspend fun speak(
+        text: String,
+        context: Context,
+        speed: Float = 1.0f,
+        srcText: String = "",
+        romanization: String = ""
+    ): String? {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return false
+        if (trimmed.isEmpty()) return null
 
         // 1) 本地缓存命中：直接回放已保存文件，不请求网络
         val cached = resolveCache(trimmed, context)
         if (cached != null) {
             playFile(cached, speed)
-            return true
+            return cached
         }
 
         // 2) 未命中：在线合成 + 持久保存 + 回放
         return withContext(Dispatchers.IO) {
             try {
-                val wavUrl = synthesize(trimmed) ?: return@withContext false
+                val wavUrl = synthesize(trimmed) ?: return@withContext null
 
                 val dlReq = Request.Builder().url(wavUrl)
                     .header("User-Agent", "Mozilla/5.0").build()
                 val dlResp = client.newCall(dlReq).execute()
-                val bytes = dlResp.body?.bytes() ?: return@withContext false
+                val bytes = dlResp.body?.bytes() ?: return@withContext null
                 dlResp.close()
-                if (bytes.isEmpty()) return@withContext false
+                if (bytes.isEmpty()) return@withContext null
 
                 // 3) 保存到 filesDir/audio/lao_yyyyMMdd_HHmmss.wav
                 val wavFile = newAudioFile(context)
                 FileOutputStream(wavFile).use { it.write(bytes) }
 
                 // 4) 写入持久化记录 + 内存缓存
-                AudioHistoryStore.add(context, trimmed, wavFile.absolutePath)
+                AudioHistoryStore.add(context, trimmed, wavFile.absolutePath, srcText, romanization)
                 memCache[trimmed] = wavFile.absolutePath
 
                 // 5) 回放
                 playFile(wavFile.absolutePath, speed)
-                true
+                wavFile.absolutePath
             } catch (e: Exception) {
                 e.printStackTrace()
-                false
+                null
             }
         }
     }
@@ -210,7 +218,7 @@ object LaoSpeech {
     fun getSavedAudioList(context: Context): List<SavedAudio> =
         AudioHistoryStore.list(context)
             .filter { it.filePath.isNotBlank() && File(it.filePath).exists() }
-            .map { SavedAudio(it.filePath, it.text, it.timestamp) }
+            .map { SavedAudio(it.filePath, it.text, it.timestamp, it.srcText, it.romanization) }
 
     /** 删除音频文件并同步清理 AudioHistoryStore 记录与内存缓存。 */
     fun deleteAudio(context: Context, path: String): Boolean {

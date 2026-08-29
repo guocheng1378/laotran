@@ -74,18 +74,38 @@ internal fun AudioHistoryPanel(onBack: () -> Unit) {
                 audios.forEach { a ->
                     Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(
-                                a.text,
-                                fontSize = 14.sp,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                formatAudioTime(a.time),
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+            if (a.srcText.isNotBlank()) {
+                Text(
+                    a.srcText,
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                a.text,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (a.romanization.isNotBlank()) {
+                Text(
+                    a.romanization,
+                    fontSize = 12.sp,
+                    color = Color(0xFF3482FF),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            Text(
+                formatAudioTime(a.time),
+                fontSize = 11.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp)
+            )
                             Row(
                                 Modifier.fillMaxWidth().padding(top = 4.dp),
                                 horizontalArrangement = Arrangement.End

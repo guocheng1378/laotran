@@ -11,8 +11,8 @@ android {
         applicationId = "com.eta.laotrans"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
     }
 
     // 固定签名：CI 从 Actions Secret(KEYSTORE_P12) 还原 laotran.keystore，

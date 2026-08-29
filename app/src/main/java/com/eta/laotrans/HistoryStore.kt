@@ -9,7 +9,8 @@ data class HistoryRecord(
     val time: Long,
     val srcText: String,
     val dstText: String,
-    val direction: String
+    val direction: String,
+    val audioPath: String = ""
 )
 
 /**
@@ -24,13 +25,13 @@ object HistoryStore {
 
     private fun sp(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun add(c: Context, srcText: String, dstText: String, direction: String) {
+    fun add(c: Context, srcText: String, dstText: String, direction: String, audioPath: String = "") {
         val list = list(c).toMutableList()
         // 原文+译文相同时只保留最新一条（更新时间）
         list.removeAll { it.srcText == srcText && it.dstText == dstText }
         val now = System.currentTimeMillis()
         // id 在现有最大 id 基础上取唯一值，避免同一毫秒多条记录 id 冲突导致误删
-        list.add(0, HistoryRecord(nextId(list, now), now, srcText, dstText, direction))
+        list.add(0, HistoryRecord(nextId(list, now), now, srcText, dstText, direction, audioPath))
         while (list.size > MAX) list.removeAt(list.size - 1)
         save(c, list)
     }
@@ -54,7 +55,8 @@ object HistoryStore {
                     o.optLong("time", System.currentTimeMillis()),
                     o.optString("src", ""),
                     o.optString("dst", ""),
-                    o.optString("dir", "")
+                    o.optString("dir", ""),
+                    o.optString("audio", "")
                 ))
             } catch (_: Exception) {}
         }
@@ -79,7 +81,8 @@ object HistoryStore {
                 .put("time", r.time)
                 .put("src", r.srcText)
                 .put("dst", r.dstText)
-                .put("dir", r.direction))
+                .put("dir", r.direction)
+                .put("audio", r.audioPath))
         }
         sp(c).edit().putString(KEY, arr.toString()).apply()
     }

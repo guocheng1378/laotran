@@ -73,7 +73,8 @@ internal fun HistoryPanel(
         } else {
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 records.forEach { r ->
-                    val hasAudio = LaoSpeech.hasCachedAudio(context, r.dstText)
+                    val audioPath = r.audioPath.takeIf { it.isNotBlank() && java.io.File(it).exists() }
+                    val hasAudio = audioPath != null || LaoSpeech.hasCachedAudio(context, r.dstText)
                     Card(
                         Modifier
                             .fillMaxWidth()
@@ -96,11 +97,12 @@ internal fun HistoryPanel(
                                 TextButton(text = "🔊 播放", onClick = {
                                     scope.launch {
                                         // 优先本地缓存音频
-                                        val cached = LaoSpeech.resolveCache(r.dstText, context)
+                                        val cached = audioPath ?: LaoSpeech.resolveCache(r.dstText, context)
                                         if (cached != null) {
                                             LaoSpeech.playFile(cached, 1.0f)
                                         } else {
-                                            LaoSpeech.speak(r.dstText, context)
+                                            val body = r.dstText.substringBefore("转写：").substringBefore("拼音：").trim()
+                                            LaoSpeech.speak(if (body.isNotEmpty()) body else r.dstText, context)
                                         }
                                     }
                                 })

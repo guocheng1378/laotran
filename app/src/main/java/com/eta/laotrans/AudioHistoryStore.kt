@@ -7,7 +7,9 @@ import org.json.JSONObject
 data class AudioRecord(
     val text: String,
     val filePath: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val srcText: String = "",
+    val romanization: String = ""
 )
 
 /**
@@ -25,11 +27,11 @@ object AudioHistoryStore {
     private fun sp(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** 新增一条音频记录（同文本已存在则只更新时间戳，去重）。 */
-    fun add(c: Context, text: String, filePath: String) {
+    fun add(c: Context, text: String, filePath: String, srcText: String = "", romanization: String = "") {
         val list = list(c).toMutableList()
         list.removeAll { it.filePath == filePath }
         val now = System.currentTimeMillis()
-        list.add(0, AudioRecord(text, filePath, now))
+        list.add(0, AudioRecord(text, filePath, now, srcText, romanization))
         while (list.size > MAX) list.removeAt(list.size - 1)
         save(c, list)
     }
@@ -45,7 +47,9 @@ object AudioHistoryStore {
                 out.add(AudioRecord(
                     o.optString("text", ""),
                     o.optString("path", ""),
-                    o.optLong("time", System.currentTimeMillis())
+                    o.optLong("time", System.currentTimeMillis()),
+                    o.optString("src", ""),
+                    o.optString("rom", "")
                 ))
             } catch (_: Exception) {}
         }
@@ -87,7 +91,9 @@ object AudioHistoryStore {
             arr.put(JSONObject()
                 .put("text", r.text)
                 .put("path", r.filePath)
-                .put("time", r.timestamp))
+                .put("time", r.timestamp)
+                .put("src", r.srcText)
+                .put("rom", r.romanization))
         }
         sp(c).edit().putString(KEY, arr.toString()).apply()
     }
