@@ -368,29 +368,49 @@ object TranslateEngine {
     /** 拉取服务端可用模型列表（OpenAI 兼容 GET /models）。失败返回空列表。 */
     /** 规范化 baseUrl：OpenAI 兼容服务接口约定在 /v1 下；若用户未显式包含 /v1 则自动补上。 */
     private fun normalizeBaseUrl(raw: String): String {
-        val u = raw.trim().trimEnd('/')
-        if (u.isEmpty() || u.endsWith("/v1")) return u
+        var u = raw.trim().trimEnd('/')
+        // 去掉用户可能粘贴的多余路径：/models、/chat/completions、/completions
+        u = u.replace(Regex("/(models|chat/completions|completions)$"), "")
+        u = u.trimEnd('/')
+        if (u.isEmpty()) return u
+        if (u.endsWith("/v1")) return u
         return if (Regex("/v\\d").containsMatchIn(u)) u else "$u/v1"
     }
 
-    fun listModelsSync(baseUrl: String, apiKey: String): List<String> {
-        if (baseUrl.isBlank()) return emptyList()
+    /** 模型列表拉取结果：models 为可用模型；error 为非空时表示拉取失败原因（如缺 Key、地址不可达）。 */
+    data class ModelListResult(val models: List<String>, val error: String?)
+
+    fun listModels(baseUrl: String, apiKey: String): ModelListResult {
+        if (baseUrl.isBlank()) return ModelListResult(emptyList(), "请先填写接口地址")
         val url = normalizeBaseUrl(baseUrl) + "/models"
-        val req = Request.Builder()
-            .url(url)
-            .header("Authorization", "Bearer $apiKey")
-            .build()
-        client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) return emptyList()
-            val body = resp.body?.string() ?: return emptyList()
-            val data = JSONObject(body).optJSONArray("data") ?: return emptyList()
-            return (0 until data.length()).mapNotNull { i ->
-                val o = data.optJSONObject(i) ?: return@mapNotNull null
-                // 兼容不同后端：优先 id，其次 name / model 字段
-                o.optString("id").takeIf { it.isNotBlank() }
-                    ?: o.optString("name").takeIf { it.isNotBlank() }
-                    ?: o.optString("model").takeIf { it.isNotBlank() }
-            }.distinct()
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $apiKey")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    val hint = when (resp.code) {
+                        401, 403 -> "（HTTP ${resp.code}：通常是 API Key 无效或未填写，请检查）"
+                        404 -> "（HTTP 404：该地址可能没有 /models 接口，请确认是 OpenAI 兼容服务）"
+                        else -> "（HTTP ${resp.code}）"
+                    }
+                    return ModelListResult(emptyList(), "拉取模型列表失败 $hint")
+                }
+                val body = resp.body?.string() ?: return ModelListResult(emptyList(), "响应为空")
+                val data = JSONObject(body).optJSONArray("data")
+                    ?: return ModelListResult(emptyList(), "响应中未找到 data 字段（不是标准 OpenAI 格式）")
+                val models = (0 until data.length()).mapNotNull { i ->
+                    val o = data.optJSONObject(i) ?: return@mapNotNull null
+                    o.optString("id").takeIf { it.isNotBlank() }
+                        ?: o.optString("name").takeIf { it.isNotBlank() }
+                        ?: o.optString("model").takeIf { it.isNotBlank() }
+                }.distinct()
+                ModelListResult(models, null)
+            }
+        } catch (e: Exception) {
+            val msg = e.message?.lines()?.firstOrNull() ?: e.javaClass.simpleName
+            ModelListResult(emptyList(), "连接失败：$msg（请确认地址可访问、网络正常）")
         }
     }
 

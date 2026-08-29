@@ -91,26 +91,35 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     var locale by remember { mutableStateOf(Config.locale(context)) }
     var translateMode by remember { mutableStateOf(Config.translateMode(context)) }
     var ttsBaseUrl by remember { mutableStateOf(Config.ttsBaseUrl(context)) }
-    var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
+    var modelResult by remember { mutableStateOf<TranslateEngine.ModelListResult?>(null) }
     var modelsLoading by remember { mutableStateOf(false) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
 
-    // 接口地址 / API Key 变化时（防抖）自动拉取可用模型列表；下拉展开时也会刷新
+    // 接口地址 / API Key 变化时（防抖）自动拉取可用模型列表；展开菜单时也会刷新。
+    // 关键修复：地址或 Key 一旦变化就强制重新拉取，避免"换了地址列表不刷新"。
     LaunchedEffect(baseUrl, apiKey, modelMenuExpanded) {
-        if (availableModels.isNotEmpty() && !modelMenuExpanded) return@LaunchedEffect
         delay(500)
         modelsLoading = true
-        availableModels = withContext(Dispatchers.IO) {
-            runCatching { TranslateEngine.listModelsSync(baseUrl, apiKey) }.getOrDefault(emptyList())
+        modelResult = withContext(Dispatchers.IO) {
+            runCatching { TranslateEngine.listModels(baseUrl, apiKey) }
+                .getOrElse { e -> TranslateEngine.ModelListResult(emptyList(), e.message ?: "未知错误") }
         }
         modelsLoading = false
     }
 
+    val availableModels = modelResult?.models ?: emptyList()
+    val modelError = modelResult?.error
     val candidates = if (availableModels.isNotEmpty()) availableModels else fallbackModels
 
     Column(Modifier.padding(20.dp)) {
         Text(context.getString(R.string.settings_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
         TextField(value = baseUrl, onValueChange = { baseUrl = it }, label = context.getString(R.string.settings_base_url), useLabelAsPlaceholder = true)
+        Text(
+            "OpenAI 兼容地址，例如 https://api.b.ai/v1；模型列表从该地址的 /models 拉取（需有效 API Key）。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+        )
         TextField(value = apiKey, onValueChange = { apiKey = it }, label = context.getString(R.string.settings_api_key), useLabelAsPlaceholder = true)
         Text(
             "API Key 以明文保存在本机，请仅在可信设备使用；使用免费翻译引擎可留空。",
@@ -144,9 +153,10 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 TextButton(text = "刷新", onClick = {
                     modelsLoading = true
                     scope.launch(Dispatchers.IO) {
-                        val list = runCatching { TranslateEngine.listModelsSync(baseUrl, apiKey) }.getOrDefault(emptyList())
+                        val r = runCatching { TranslateEngine.listModels(baseUrl, apiKey) }
+                            .getOrElse { e -> TranslateEngine.ModelListResult(emptyList(), e.message ?: "未知错误") }
                         withContext(Dispatchers.Main) {
-                            availableModels = list
+                            modelResult = r
                             modelsLoading = false
                         }
                     }
@@ -169,6 +179,19 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 ) {
                     if (modelsLoading) {
                         Text("加载中…", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+                    } else if (modelError != null) {
+                        Text(
+                            modelError ?: "拉取失败",
+                            fontSize = 13.sp,
+                            color = Color.Red.copy(alpha = 0.85f),
+                            modifier = Modifier.padding(16.dp)
+                        )
+                        Text(
+                            "可手动填写模型名（如 ${fallbackModels.first()}），保存后仍可使用。",
+                            fontSize = 13.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
                     } else if (candidates.isEmpty()) {
                         Text("未获取到模型，请手动输入模型名", fontSize = 14.sp, modifier = Modifier.padding(20.dp))
                     } else {
