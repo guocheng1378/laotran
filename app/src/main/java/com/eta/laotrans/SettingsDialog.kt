@@ -90,6 +90,7 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     var model by remember { mutableStateOf(Config.model(context)) }
     var locale by remember { mutableStateOf(Config.locale(context)) }
     var translateMode by remember { mutableStateOf(Config.translateMode(context)) }
+    var ttsBaseUrl by remember { mutableStateOf(Config.ttsBaseUrl(context)) }
     var availableModels by remember { mutableStateOf<List<String>>(emptyList()) }
     var modelsLoading by remember { mutableStateOf(false) }
     var modelMenuExpanded by remember { mutableStateOf(false) }
@@ -118,6 +119,13 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
             modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
         )
         TextField(value = model, onValueChange = { model = it }, label = context.getString(R.string.settings_model), useLabelAsPlaceholder = true)
+        TextField(value = ttsBaseUrl, onValueChange = { ttsBaseUrl = it }, label = "语音合成（Gradio 模型）地址", useLabelAsPlaceholder = true)
+        Text(
+            "老挝语发音使用的 Gradio TTS 服务地址；若原服务失效，可改为新的 Space 地址（以 http 开头）。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+        )
 
         // 模型下拉：点击展开可用模型列表，列表可滚动，点选回填
         Row(
@@ -314,6 +322,7 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 text = context.getString(R.string.settings_save),
                 onClick = {
                     Config.save(context, baseUrl, apiKey, model, locale)
+                    Config.saveTtsBaseUrl(context, ttsBaseUrl)
                     Config.saveTranslateMode(context, translateMode)
                     onSaved()
                     // 若界面语言有变化，重建 Activity 使新的 Locale 生效

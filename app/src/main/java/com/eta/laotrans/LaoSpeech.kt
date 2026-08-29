@@ -44,7 +44,7 @@ data class SavedAudio(
  */
 object LaoSpeech {
 
-    private const val BASE = "https://kenjichou-lao-tts-api.hf.space"
+    private const val DEFAULT_BASE = "https://kenjichou-lao-tts-api.hf.space"
     private const val AUDIO_DIR = "audio"
 
     private val client = OkHttpClient.Builder()
@@ -96,7 +96,7 @@ object LaoSpeech {
         // 2) 未命中：在线合成 + 持久保存 + 回放
         return withContext(Dispatchers.IO) {
             try {
-                val wavUrl = synthesize(trimmed) ?: return@withContext null
+                val wavUrl = synthesize(trimmed, Config.ttsBaseUrl(context)) ?: return@withContext null
 
                 val dlReq = Request.Builder().url(wavUrl)
                     .header("User-Agent", "Mozilla/5.0").build()
@@ -144,7 +144,7 @@ object LaoSpeech {
         !text.isNullOrBlank() && resolveCache(text, context) != null
 
     /** 提交 Gradio 队列合成并轮询，返回 wav 下载 url（失败返回 null）。 */
-    private fun synthesize(text: String): String? {
+    private fun synthesize(text: String, base: String = DEFAULT_BASE): String? {
         val session = "lao${System.currentTimeMillis()}"
 
         // 1) 提交合成任务到队列
@@ -156,7 +156,7 @@ object LaoSpeech {
             .put("session_hash", session)
 
         val joinReq = Request.Builder()
-            .url("$BASE/gradio_api/queue/join")
+            .url("$base/gradio_api/queue/join")
             .post(joinJson.toString().toRequestBody("application/json".toMediaType()))
             .header("User-Agent", "Mozilla/5.0")
             .build()
@@ -169,7 +169,7 @@ object LaoSpeech {
             ?: return null
 
         // 2) 轮询等待合成完成（SSE：text/event-stream，逐行读取）
-        val pollUrl = "$BASE/gradio_api/queue/data?session_hash=$session&event_id=$eventId"
+        val pollUrl = "$base/gradio_api/queue/data?session_hash=$session&event_id=$eventId"
         val pollReq = Request.Builder().url(pollUrl)
             .header("User-Agent", "Mozilla/5.0").build()
         val pollResp = client.newCall(pollReq).execute()

@@ -16,9 +16,20 @@ object Config {
     private const val KEY_MODEL = "model"
     private const val KEY_LOCALE = "locale"
     private const val KEY_TRANSLATE_MODE = "translate_mode"
+    private const val KEY_TTS_BASE_URL = "tts_base_url"
 
     // 默认值：b.ai
     fun defaultBaseUrl() = "https://api.b.ai/v1"
+
+    /** 语音合成（Gradio TTS 模型）服务地址，可在设置中切换；默认 kenjichou 的 MMS TTS。 */
+    fun defaultTtsBaseUrl() = "https://kenjichou-lao-tts-api.hf.space"
+
+    fun ttsBaseUrl(c: Context): String =
+        sp(c).getString(KEY_TTS_BASE_URL, defaultTtsBaseUrl()) ?: defaultTtsBaseUrl()
+
+    fun saveTtsBaseUrl(c: Context, url: String) {
+        sp(c).edit().putString(KEY_TTS_BASE_URL, url.trim()).apply()
+    }
 
     private fun sp(c: Context): SharedPreferences =
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
