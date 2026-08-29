@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.GlobalScope
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -81,6 +83,7 @@ internal fun SettingsPanel(onBack: () -> Unit, onSaved: () -> Unit) {
 @Composable
 private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var baseUrl by remember { mutableStateOf(Config.baseUrl(context)) }
     var apiKey by remember { mutableStateOf(Config.apiKey(context)) }
     var model by remember { mutableStateOf(Config.model(context)) }
@@ -234,7 +237,7 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 text = "检查更新",
                 onClick = {
                     updateMsg.value = "检查中…"
-                    kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                    scope.launch(Dispatchers.IO) {
                         runCatching {
                             val info = Updater.check()
                             withContext(Dispatchers.Main) {
