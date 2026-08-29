@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.GlobalScope
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -215,6 +216,39 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                 onClick = {
                     AudioHistoryStore.clear(context)
                     Toast.makeText(context, "音频库已清空", Toast.LENGTH_SHORT).show()
+                },
+                colors = ButtonDefaults.textButtonColorsPrimary()
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+        Text("关于 / 更新", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        val updateMsg = remember { mutableStateOf<String?>(null) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("当前版本：${BuildConfig.VERSION_NAME}", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                updateMsg.value?.let { Text(it, fontSize = 12.sp, color = Color.Gray.copy(alpha = 0.85f)) }
+            }
+            Spacer(Modifier.width(12.dp))
+            TextButton(
+                text = "检查更新",
+                onClick = {
+                    updateMsg.value = "检查中…"
+                    kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                        runCatching {
+                            val info = Updater.check()
+                            withContext(Dispatchers.Main) {
+                                if (info.hasUpdate && info.downloadUrl.isNotEmpty()) {
+                                    updateMsg.value = "发现新版本 v${info.latestVersion}，正在下载…"
+                                    runCatching { Updater.downloadAndInstall(context, info.downloadUrl) }
+                                } else {
+                                    updateMsg.value = "已是最新 (v${info.latestVersion})"
+                                }
+                            }
+                        }.onFailure {
+                            withContext(Dispatchers.Main) { updateMsg.value = "检查失败，请检查网络" }
+                        }
+                    }
                 },
                 colors = ButtonDefaults.textButtonColorsPrimary()
             )

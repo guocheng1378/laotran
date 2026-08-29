@@ -34,11 +34,27 @@ jobs:
             echo "警告：未设置 Secrets.API_KEY，运行时可翻译但需配置 key"
           fi
 
-      - name: 编译 Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: 还原固定签名密钥（来自 Secret KEYSTORE_P12）
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_P12 }}" ]; then
+            echo "${{ secrets.KEYSTORE_P12 }}" | base64 -d > laotran.keystore
+            echo "已还原固定签名密钥 laotran.keystore"
+          else
+            echo "警告：未设置 Secrets.KEYSTORE_P12，将使用默认 debug 签名（覆盖更新会失败）"
+          fi
 
-      - name: 上传 APK 产物
-        uses: actions/upload-artifact@v4
+      - name: 编译 Release APK（固定签名）
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: laotran-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          tag_name: v1.8
+          name: LaoTran v1.8
+          body: |
+            自动构建发布版（固定签名，支持应用内覆盖更新）。
+            含免费翻译引擎 MyMemory、音频持久化、历史记录、4-tab UI。
+          files: app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -11,14 +11,27 @@ android {
         applicationId = "com.eta.laotrans"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
+    }
+
+    // 固定签名：CI 从 Actions Secret(KEYSTORE_P12) 还原 laotran.keystore，
+    // 这样每次构建的 APK 同签名，应用内"覆盖更新"才能成功。
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("laotran.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+            storeType = "PKCS12"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -44,4 +57,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.core:core-ktx:1.13.1")
 }

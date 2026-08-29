@@ -69,6 +69,10 @@ import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import androidx.compose.ui.window.Dialog
 
 @Composable
 fun LaotranApp() {
@@ -84,6 +88,18 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
 
     // 首次挂载：读取语速 + 初始化 TTS
     LaunchedEffect(Unit) { vm.init(context) }
+
+    var updateInfo by remember { mutableStateOf<Updater.UpdateInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        runCatching {
+            val info = Updater.check()
+            if (info.hasUpdate && info.downloadUrl.isNotEmpty()) {
+                updateInfo = info
+                showUpdateDialog = true
+            }
+        }
+    }
 
     // ====== 语音识别 ======
     var pendingVoiceLang by remember { mutableStateOf("zh-CN") }
@@ -183,6 +199,19 @@ private fun LaotranScreen(vm: TranslationViewModel = viewModel()) {
             )
         }
 
+        if (showUpdateDialog && updateInfo != null) {
+            UpdateDialog(
+                info = updateInfo!!,
+                onDismiss = { showUpdateDialog = false },
+                onUpdate = {
+                    showUpdateDialog = false
+                    Toast.makeText(context, "正在下载更新…", Toast.LENGTH_SHORT).show()
+                    vm.viewModelScope.launch {
+                        runCatching { Updater.downloadAndInstall(context, updateInfo!!.downloadUrl) }
+                    }
+                }
+            )
+        }
         // ====== 底部 Miuix 悬浮玻璃导航栏 ======
         Box(
             Modifier
@@ -511,6 +540,25 @@ private fun BottomNavItem(
             Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(top = 3.dp))
         } else {
             Text(label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.padding(vertical = 8.dp))
+        }
+    }
+}
+
+@Composable
+private fun UpdateDialog(info: Updater.UpdateInfo, onDismiss: () -> Unit, onUpdate: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                Text("发现新版本 v${info.latestVersion}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                Text(info.notes.ifEmpty { "点击更新以下载并安装新版本（将覆盖当前版本）。" }, fontSize = 13.sp, color = Color.Gray.copy(alpha = 0.85f))
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(text = "稍后", onClick = onDismiss)
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(text = "立即更新", onClick = onUpdate, colors = ButtonDefaults.textButtonColorsPrimary())
+                }
+            }
         }
     }
 }
