@@ -370,7 +370,7 @@ object TranslateEngine {
     private fun normalizeBaseUrl(raw: String): String {
         val u = raw.trim().trimEnd('/')
         if (u.isEmpty() || u.endsWith("/v1")) return u
-        return if (Regex("/v\d").containsMatchIn(u)) u else "$u/v1"
+        return if (Regex("/v\\d").containsMatchIn(u)) u else "$u/v1"
     }
 
     fun listModelsSync(baseUrl: String, apiKey: String): List<String> {
