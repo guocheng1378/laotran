@@ -357,6 +357,21 @@ private fun TranslateContent(
                 GlassButton(text = "朗读", onClick = { vm.speak(context) })
             }
             Spacer(Modifier.height(16.dp))
+            // 音色快捷切换（仅 Edge 引擎生效；MMS 固定单音色）
+            var voiceLocal by remember { mutableStateOf(Config.ttsVoice(context)) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("音色", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.weight(1f))
+                VoiceChip(label = "女声", selected = voiceLocal == EdgeTts.VOICE_FEMALE, onClick = {
+                    voiceLocal = EdgeTts.VOICE_FEMALE
+                    Config.saveTtsVoice(context, EdgeTts.VOICE_FEMALE)
+                })
+                Spacer(Modifier.width(8.dp))
+                VoiceChip(label = "男声", selected = voiceLocal == EdgeTts.VOICE_MALE, onClick = {
+                    voiceLocal = EdgeTts.VOICE_MALE
+                    Config.saveTtsVoice(context, EdgeTts.VOICE_MALE)
+                })
+            }
+            Spacer(Modifier.height(16.dp))
             var speedLocal by remember { mutableStateOf(vm.speakSpeed) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(context.getString(R.string.speed_label), fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.weight(1f))
@@ -373,6 +388,31 @@ private fun TranslateContent(
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             )
         }
+    }
+}
+
+// ================= 音色快捷切换 chip =================
+
+@Composable
+private fun VoiceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(15.dp)
+    val bg = if (selected) MiuixTheme.colorScheme.primary.copy(alpha = 0.92f)
+    else Color.White.copy(alpha = 0.5f)
+    val fg = if (selected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, Color.White.copy(alpha = 0.6f), shape)
+            .clickable { onClick() }
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, fontSize = 13.sp, color = fg)
     }
 }
 
