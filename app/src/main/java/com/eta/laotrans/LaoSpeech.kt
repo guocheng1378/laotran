@@ -32,11 +32,11 @@ data class SavedAudio(
 )
 
 /**
- * 老挝语语音合成引擎（在线 Meta MMS TTS）+ 本地音频持久化。
+ * 老挝语语音合成引擎（默认微软 Edge 在线 TTS，失败回退 Meta MMS Gradio）+ 本地音频持久化。
  *
  * 流程：
- * 1) 合成：老挝语文本 -> 在线 Gradio Space（kenjichou/lao-tts-api）队列 -> 得到 wav url。
- * 2) 持久化：下载 wav 保存到 context.filesDir/audio/lao_yyyyMMdd_HHmmss.wav，
+ * 1) 合成：默认走微软 Edge 在线 TTS（WebSocket，免费无需 Key）得到 MP3；失败回退 Meta MMS（Gradio Space）得到 wav。
+ * 2) 持久化：下载音频保存到 context.filesDir/audio/lao_yyyyMMdd_HHmmss.mp3（Edge）或 .wav（MMS 兜底），
  *    并把记录写入 [AudioHistoryStore]（text、filePath、timestamp）。
  * 3) 本地缓存：相同文本再次朗读时，先查内存 [memCache]、再查 [AudioHistoryStore]，
  *    命中直接回放已保存文件，不请求网络。
@@ -96,26 +96,35 @@ object LaoSpeech {
         // 2) 未命中：在线合成 + 持久保存 + 回放
         return withContext(Dispatchers.IO) {
             try {
-                val wavUrl = synthesize(trimmed, Config.ttsBaseUrl(context)) ?: return@withContext null
+                // 1) 优先用微软 Edge 在线 TTS（免费、无需 key、音质更好）
+                val mp3 = EdgeTts.synthesize(trimmed)
 
-                val dlReq = Request.Builder().url(wavUrl)
-                    .header("User-Agent", "Mozilla/5.0").build()
-                val dlResp = client.newCall(dlReq).execute()
-                val bytes = dlResp.body?.bytes() ?: return@withContext null
-                dlResp.close()
-                if (bytes.isEmpty()) return@withContext null
+                // 2) Edge 失败时回退到原 Meta MMS Gradio TTS
+                val outFile = if (mp3 != null) {
+                    val f = newAudioFile(context, "mp3")
+                    FileOutputStream(f).use { it.write(mp3) }
+                    f
+                } else {
+                    val wavUrl = synthesize(trimmed, Config.ttsBaseUrl(context))
+                        ?: return@withContext null
+                    val dlReq = Request.Builder().url(wavUrl)
+                        .header("User-Agent", "Mozilla/5.0").build()
+                    val dlResp = client.newCall(dlReq).execute()
+                    val bytes = dlResp.body?.bytes() ?: return@withContext null
+                    dlResp.close()
+                    if (bytes.isEmpty()) return@withContext null
+                    val f = newAudioFile(context, "wav")
+                    FileOutputStream(f).use { it.write(bytes) }
+                    f
+                }
 
-                // 3) 保存到 filesDir/audio/lao_yyyyMMdd_HHmmss.wav
-                val wavFile = newAudioFile(context)
-                FileOutputStream(wavFile).use { it.write(bytes) }
+                // 3) 写入持久化记录 + 内存缓存
+                AudioHistoryStore.add(context, trimmed, outFile.absolutePath, srcText, romanization)
+                memCache[trimmed] = outFile.absolutePath
 
-                // 4) 写入持久化记录 + 内存缓存
-                AudioHistoryStore.add(context, trimmed, wavFile.absolutePath, srcText, romanization)
-                memCache[trimmed] = wavFile.absolutePath
-
-                // 5) 回放
-                playFile(wavFile.absolutePath, speed)
-                wavFile.absolutePath
+                // 4) 回放
+                playFile(outFile.absolutePath, speed)
+                outFile.absolutePath
             } catch (e: Exception) {
                 e.printStackTrace()
                 speakViaSystemTts(trimmed, context)
@@ -204,13 +213,13 @@ object LaoSpeech {
     }
 
     /** 生成持久化 wav 文件名（lao_yyyyMMdd_HHmmss.wav，撞名时追加序号避免覆盖）。 */
-    private fun newAudioFile(context: Context): File {
+    private fun newAudioFile(context: Context, ext: String = "wav"): File {
         val dir = audioDir(context)
         val base = "lao_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        var file = File(dir, "$base.wav")
+        var file = File(dir, "$base.$ext")
         var i = 1
         while (file.exists()) {
-            file = File(dir, "${base}_$i.wav")
+            file = File(dir, "${base}_$i.$ext")
             i++
         }
         return file
