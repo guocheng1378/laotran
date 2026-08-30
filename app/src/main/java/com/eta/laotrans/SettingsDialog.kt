@@ -276,6 +276,53 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
         }
 
         // ====== 音频管理 ======
+        // ====== 语音合成引擎 ======
+        Spacer(Modifier.height(20.dp))
+        Text("语音合成引擎", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        Text(
+            "首选引擎：自动(Edge 优先) / 仅 Edge / 仅 MMS(Gradio 兜底)。音色与语速仅 Edge 支持，MMS 固定单音色、固定语速。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f),
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        var ttsEngine by remember { mutableStateOf(Config.ttsEngine(context)) }
+        listOf(
+            Config.TtsEngine.AUTO to "自动（Edge 优先）",
+            Config.TtsEngine.EDGE to "仅 Edge",
+            Config.TtsEngine.MMS to "仅 MMS（Gradio 兜底）"
+        ).forEach { (eng, label) ->
+            val selected = ttsEngine == eng
+            Row(
+                Modifier.fillMaxWidth().clickable { ttsEngine = eng }.padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                if (selected) Text("✓", fontSize = 15.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("音色（仅 Edge）", fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
+        var ttsVoice by remember { mutableStateOf(Config.ttsVoice(context)) }
+        listOf(
+            EdgeTts.VOICE_FEMALE to "女声（Keomany）",
+            EdgeTts.VOICE_MALE to "男声（Chanthavong）"
+        ).forEach { (vid, label) ->
+            val selected = ttsVoice == vid
+            Row(
+                Modifier.fillMaxWidth().clickable { ttsVoice = vid }.padding(horizontal = 18.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                if (selected) Text("✓", fontSize = 15.sp)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "语速调节在翻译页「朗读」卡片（0.75×~2.0×）：对 Edge 写入合成速率，对 MMS 仅改变播放速度。",
+            fontSize = 12.sp,
+            color = Color.Gray.copy(alpha = 0.8f)
+        )
+
         Spacer(Modifier.height(20.dp))
         Text("音频管理", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
         val audioCount = AudioHistoryStore.list(context).size
@@ -347,6 +394,8 @@ private fun SettingsBody(onBack: () -> Unit, onSaved: () -> Unit) {
                     Config.save(context, baseUrl, apiKey, model, locale)
                     Config.saveTtsBaseUrl(context, ttsBaseUrl)
                     Config.saveTranslateMode(context, translateMode)
+                    Config.saveTtsEngine(context, ttsEngine)
+                    Config.saveTtsVoice(context, ttsVoice)
                     onSaved()
                     // 若界面语言有变化，重建 Activity 使新的 Locale 生效
                     (context as? android.app.Activity)?.recreate()

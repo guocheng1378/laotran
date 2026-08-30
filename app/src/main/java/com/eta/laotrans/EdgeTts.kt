@@ -96,11 +96,11 @@ object EdgeTts {
         return sb.toString()
     }
 
-    private fun buildSsml(text: String, voice: String): String {
+    private fun buildSsml(text: String, voice: String, rate: String = "+0%"): String {
         val escaped = xmlEscape(text)
         return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='lo-LA'>" +
                 "<voice name='$voice'>" +
-                "<prosody pitch='+0Hz' rate='+0%' volume='+0%'>$escaped</prosody>" +
+                "<prosody pitch='+0Hz' rate='$rate' volume='+0%'>$escaped</prosody>" +
                 "</voice></speak>"
     }
 
@@ -130,7 +130,8 @@ object EdgeTts {
      */
     suspend fun synthesize(
         text: String,
-        voice: String = VOICE_FEMALE
+        voice: String = VOICE_FEMALE,
+        rate: String = "+0%"
     ): ByteArray? = withContext(Dispatchers.IO) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return@withContext null
@@ -167,7 +168,7 @@ object EdgeTts {
             val listener = object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocket.send(speechConfigMsg())
-                    webSocket.send(ssmlMsg(buildSsml(trimmed, voice)))
+                    webSocket.send(ssmlMsg(buildSsml(trimmed, voice, rate)))
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {

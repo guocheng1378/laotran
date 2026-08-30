@@ -17,6 +17,27 @@ object Config {
     private const val KEY_LOCALE = "locale"
     private const val KEY_TRANSLATE_MODE = "translate_mode"
     private const val KEY_TTS_BASE_URL = "tts_base_url"
+    private const val KEY_TTS_ENGINE = "tts_engine"
+    private const val KEY_TTS_VOICE = "tts_voice"
+
+    /** 语音合成首选引擎：自动(Edge 优先) / 仅 Edge / 仅 MMS(Gradio 兜底)。 */
+    enum class TtsEngine { AUTO, EDGE, MMS }
+
+    /** 语音合成首选引擎（默认自动：Edge 优先，失败回退 MMS）。 */
+    fun ttsEngine(c: Context): TtsEngine {
+        val raw = sp(c).getString(KEY_TTS_ENGINE, TtsEngine.AUTO.name) ?: TtsEngine.AUTO.name
+        return runCatching { TtsEngine.valueOf(raw) }.getOrDefault(TtsEngine.AUTO)
+    }
+    fun saveTtsEngine(c: Context, e: TtsEngine) {
+        sp(c).edit().putString(KEY_TTS_ENGINE, e.name).apply()
+    }
+
+    /** Edge TTS 音色：默认女声；仅对 Edge 引擎生效，MMS 固定单音色。 */
+    fun ttsVoice(c: Context): String =
+        sp(c).getString(KEY_TTS_VOICE, EdgeTts.VOICE_FEMALE) ?: EdgeTts.VOICE_FEMALE
+    fun saveTtsVoice(c: Context, v: String) {
+        sp(c).edit().putString(KEY_TTS_VOICE, v).apply()
+    }
 
     // 默认值：b.ai
     fun defaultBaseUrl() = "https://api.b.ai/v1"

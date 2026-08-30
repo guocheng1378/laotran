@@ -132,7 +132,7 @@ class TranslationViewModel : ViewModel() {
         speakJob = viewModelScope.launch {
             if (TranslateEngine.containsLao(body)) {
                 status = ctx(context, R.string.status_synth_lao)
-                val path = LaoSpeech.speak(body, context, speakSpeed, srcText = input.trim(), romanization = rom)
+                val path = LaoSpeech.speak(body, context, speakSpeed, srcText = input.trim(), romanization = rom, engine = Config.ttsEngine(context), voice = Config.ttsVoice(context))
                 status = if (path != null) ctx(context, R.string.status_speak_ok) else ctx(context, R.string.status_speak_fail)
             } else {
                 status = ctx(context, R.string.status_synth_voice)
@@ -233,7 +233,7 @@ class TranslationViewModel : ViewModel() {
                         .firstOrNull { it.startsWith("转写：") || it.startsWith("拼音：") }
                         ?.substringAfter("：")?.trim() ?: ""
                     // 合成老挝语语音并把音频路径关联进历史记录，便于历史面板直接回放/跳转音频库
-                    val audioPath = LaoSpeech.speak(body, context, speakSpeed, srcText = text, romanization = rom)
+                    val audioPath = LaoSpeech.speak(body, context, speakSpeed, srcText = text, romanization = rom, engine = Config.ttsEngine(context), voice = Config.ttsVoice(context))
                     HistoryStore.add(context, text, res, dirLabel, audioPath ?: "")
                     status = if (audioPath != null) ctx(context, R.string.status_speak_ok) else ctx(context, R.string.status_speak_fail)
                 } else {

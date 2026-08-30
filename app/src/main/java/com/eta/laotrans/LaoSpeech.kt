@@ -81,7 +81,9 @@ object LaoSpeech {
         context: Context,
         speed: Float = 1.0f,
         srcText: String = "",
-        romanization: String = ""
+        romanization: String = "",
+        engine: Config.TtsEngine = Config.TtsEngine.AUTO,
+        voice: String = EdgeTts.VOICE_FEMALE
     ): String? {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return null
@@ -89,15 +91,27 @@ object LaoSpeech {
         // 1) 本地缓存命中：直接回放已保存文件，不请求网络
         val cached = resolveCache(trimmed, context)
         if (cached != null) {
-            playFile(cached, speed)
+            playFile(cached, playbackSpeedFor(cached, speed))
             return cached
         }
 
         // 2) 未命中：在线合成 + 持久保存 + 回放
         return withContext(Dispatchers.IO) {
             try {
-                // 1) 优先用微软 Edge 在线 TTS（免费、无需 key、音质更好）
-                val mp3 = EdgeTts.synthesize(trimmed)
+                // Edge 合成速率由 speed 映射（仅 Edge 支持变声变速）；MMS 不支持，只能靠播放速度
+                val rate = rateStr(speed)
+
+                // 按首选引擎决定合成路径
+                val useEdgeFirst = when (engine) {
+                    Config.TtsEngine.EDGE -> true
+                    Config.TtsEngine.MMS -> false
+                    else -> true
+                }
+                val allowMmsFallback = engine != Config.TtsEngine.EDGE
+
+                val mp3 = if (useEdgeFirst) {
+                    EdgeTts.synthesize(trimmed, voice, rate)
+                } else null
 
                 // 2) Edge 失败时回退到原 Meta MMS Gradio TTS
                 val outFile = if (mp3 != null) {
@@ -123,7 +137,7 @@ object LaoSpeech {
                 memCache[trimmed] = outFile.absolutePath
 
                 // 4) 回放
-                playFile(outFile.absolutePath, speed)
+                playFile(outFile.absolutePath, playbackSpeedFor(outFile.absolutePath, speed))
                 outFile.absolutePath
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -132,6 +146,16 @@ object LaoSpeech {
             }
         }
     }
+
+    /** 将播放速度(0.75~2.0)映射为 Edge SSML 速率百分比，如 1.0->+0%、1.5->+50%、0.75->-25%。 */
+    private fun rateStr(speed: Float): String {
+        val pct = ((speed - 1.0f) * 100f).toInt()
+        return "${if (pct >= 0) "+" else ""}$pct%"
+    }
+
+    /** Edge 合成的音频速率已写入文件，回放用 1.0f；MMS(wav) 只能靠播放速度变速。 */
+    private fun playbackSpeedFor(path: String, userSpeed: Float): Float =
+        if (path.endsWith(".mp3", ignoreCase = true)) 1.0f else userSpeed
 
     /** 查本地缓存：先内存再持久化；命中返回文件路径，文件丢失则清理对应记录。 */
     fun resolveCache(text: String, context: Context): String? {
